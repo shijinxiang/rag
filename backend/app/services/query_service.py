@@ -53,10 +53,14 @@ class QueryService:
         """
         k = top_k or settings.RAG_TOP_K
 
-        # ---- Step 1: Retrieve ----
-        docs_with_scores = self._retriever.retrieve_with_scores(
-            query=question, top_k=k, filters=filters
-        )
+        # ---- Step 1: Retrieve (skip on SQLite — no vector store) ----
+        docs_with_scores: list[tuple[LCDocument, float]] = []
+        try:
+            docs_with_scores = self._retriever.retrieve_with_scores(
+                query=question, top_k=k, filters=filters
+            )
+        except Exception:
+            logger.warning("Vector retrieval unavailable — returning empty context.")
 
         # ---- Step 2: Convert to ContextDoc ----
         contexts = []
@@ -111,9 +115,13 @@ class QueryService:
     ) -> list[dict]:
         """Retrieve relevant documents without generating an answer."""
         k = top_k or settings.RAG_TOP_K
-        docs_with_scores = self._retriever.retrieve_with_scores(
-            query=question, top_k=k, filters=filters
-        )
+        docs_with_scores: list[tuple[LCDocument, float]] = []
+        try:
+            docs_with_scores = self._retriever.retrieve_with_scores(
+                query=question, top_k=k, filters=filters
+            )
+        except Exception:
+            logger.warning("Vector retrieval unavailable in retrieve_only - returning empty results.")
 
         return [
             {

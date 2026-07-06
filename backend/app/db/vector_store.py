@@ -44,6 +44,12 @@ class VectorStore:
             )
         return self._store
 
+    @property
+    def is_available(self) -> bool:
+        """Return False when running on SQLite (vector search unavailable)."""
+        url = (settings.DATABASE_URL or "").strip()
+        return not url.startswith("sqlite")
+
     def add_documents(self, documents: list[LCDocument]) -> list[str]:
         """
         Add documents to the vector store (embeds + inserts).

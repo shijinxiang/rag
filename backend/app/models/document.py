@@ -6,10 +6,11 @@ Document & DocumentChunk ORM Models
 import uuid
 from typing import Optional
 
-from pgvector.sqlalchemy import Vector
-from sqlalchemy import Enum, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db._types import JSONCompat, NullableVector  # JSONB→JSON on SQLite; Vector→Float on SQLite
 
 from app.models.base import Base, TimestampMixin, UUIDMixin
 
@@ -59,9 +60,9 @@ class DocumentChunk(Base, UUIDMixin, TimestampMixin):
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     page_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    chunk_metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    chunk_metadata: Mapped[dict] = mapped_column(JSONCompat(), default=dict, nullable=False)
     embedding: Mapped[Optional[list[float]]] = mapped_column(
-        Vector(1536), nullable=True  # pgvector column; dimension matches embedding model
+        NullableVector(1536), nullable=True
     )
 
     # Relationships

@@ -44,8 +44,8 @@ async def lifespan(app: FastAPI):
 
     # Shutdown: clean up connections
     logger.info("Shutting down...")
-    from app.db.session import engine
-    await engine.dispose()
+    from app.db.session import close_db
+    await close_db()
     logger.info("Application stopped.")
 
 

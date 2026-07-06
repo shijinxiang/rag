@@ -168,10 +168,33 @@ The system is evaluated on a Golden Dataset of 50-100 Q&A pairs across 5 categor
 - [Interview Guide (5 min)](docs/interview-5min.md) — Quick project walkthrough
 - [Interview Guide (15 min)](docs/interview-15min.md) — Deep-dive technical explanation
 
+## Implementation Status
+
+### Phase 1: Basic RAG MVP — May 2026
+The core RAG pipeline is implemented and tested.  We can:
+- Upload .txt / .md / .pdf / .docx documents
+- Parse, chunk, and generate OpenAI embeddings (text-embedding-3-small)
+- Store chunks + vectors in PostgreSQL/pgvector (fallback: file-based SQLite for tests)
+- POST /api/v1/queries to retrieve top-K chunks and generate an LLM answer
+- SEE /api/v1/queries/stream for streaming answers
+- Return source citations per answer (doc title, page number, chunk excerpt, similarity score)
+- Frontend chat page (Next.js) renders answers + citation cards
+
+### Currently NOT yet implemented (planned for future phases)
+- JWT / RBAC authentication
+- Hybrid Search (BM25 + dense)
+- Reranker (Cohere / BGE / Jina)
+- LangGraph Agent routing & tool calling
+- Human-in-the-loop review
+- Celery async document processing
+- LangSmith / Prometheus / Grafana monitoring
+- Ragas automated evaluation
+- Docker Compose full-stack deployment (infrastructure configs exist, not yet wired end-to-end)
+
 ## Roadmap
 
 - [x] **Phase 0**: Project skeleton, Git init, config files
-- [ ] **Phase 1**: Basic RAG MVP (upload → embed → retrieve → answer)
+- [x] **Phase 1**: Basic RAG MVP (upload → embed → retrieve → answer)
 - [ ] **Phase 2**: Retrieval quality (Hybrid Search + Reranker + Query Rewrite)
 - [ ] **Phase 3**: Agent (LangGraph routing + tool calling + human-in-the-loop)
 - [ ] **Phase 4**: Enterprise (JWT/RBAC + async tasks + audit logging)
