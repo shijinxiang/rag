@@ -19,20 +19,30 @@ settings *before* either engine is created, so both point at the same file.
 import os
 import uuid
 from collections.abc import AsyncGenerator, AsyncIterator
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
+
+# Project-root-relative directory for test artifacts (SQLite DB, etc.)
+# We don't use tmp_path_factory so tests work even when system temp is restricted.
+_TEST_ARTIFACTS = Path(__file__).resolve().parent.parent / ".test-artifacts"
 
 
 # ---------------------------------------------------------------------------
 # 1. The one-and-only test database URL
 # ---------------------------------------------------------------------------
 @pytest.fixture(scope="session")
-def _test_db_url(tmp_path_factory) -> str:
-    """Return a file-path SQLite URL that both engines will share."""
-    db_dir = tmp_path_factory.mktemp("data")
-    return f"sqlite+aiosqlite:///{db_dir / 'test_rag.db'}"
+def _test_db_url() -> str:
+    """Return a file-path SQLite URL that both engines will share.
+
+    The database file lives inside the project (backend/.test-artifacts/) so
+    tests don't depend on system temp directory permissions.
+    """
+    _TEST_ARTIFACTS.mkdir(parents=True, exist_ok=True)
+    db_path = _TEST_ARTIFACTS / "test_rag.db"
+    return f"sqlite+aiosqlite:///{db_path}"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -162,9 +172,11 @@ async def async_client(test_db) -> AsyncIterator:
 # 5. Sample document helpers
 # ---------------------------------------------------------------------------
 @pytest.fixture
-def sample_txt_path(tmp_path) -> str:
+def sample_txt_path() -> str:
     """A tiny text file for testing document loading."""
-    file_path = tmp_path / "test_doc.txt"
+    file_dir = _TEST_ARTIFACTS / "sample_docs"
+    file_dir.mkdir(parents=True, exist_ok=True)
+    file_path = file_dir / "test_doc.txt"
     file_path.write_text(
         "Chapter 1: Company Policy\n\n"
         "Article 1: Employees must follow company regulations.\n\n"

@@ -170,13 +170,13 @@ The system is evaluated on a Golden Dataset of 50-100 Q&A pairs across 5 categor
 
 ## Implementation Status
 
-### Phase 1: Basic RAG MVP — May 2026
-The core RAG pipeline is implemented and tested.  We can:
+### Phase 1: Basic RAG MVP — implemented, verification in progress
+The core RAG pipeline is implemented and tested (13 tests, 69% coverage).  We can:
 - Upload .txt / .md / .pdf / .docx documents
 - Parse, chunk, and generate OpenAI embeddings (text-embedding-3-small)
 - Store chunks + vectors in PostgreSQL/pgvector (fallback: file-based SQLite for tests)
 - POST /api/v1/queries to retrieve top-K chunks and generate an LLM answer
-- SEE /api/v1/queries/stream for streaming answers
+- SSE /api/v1/queries/stream for streaming answers
 - Return source citations per answer (doc title, page number, chunk excerpt, similarity score)
 - Frontend chat page (Next.js) renders answers + citation cards
 

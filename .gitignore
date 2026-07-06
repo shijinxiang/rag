@@ -189,4 +189,5 @@ Desktop.ini
 .tmp/
 tmp_pytest/
 backend/.tmp/
+backend/.test-artifacts/
 *.db
