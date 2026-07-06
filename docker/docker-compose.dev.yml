@@ -1,0 +1,36 @@
+version: "3.9"
+
+# =============================================================================
+# Development Override — adds hot-reload, debug ports, exposed DB ports
+# =============================================================================
+# Usage:
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.dev.yml up -d
+
+services:
+  backend:
+    build:
+      target: builder
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - APP_ENV=development
+      - APP_DEBUG=true
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ../backend/app:/app/app:ro
+      - ../backend/tests:/app/tests:ro
+
+  frontend:
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ../frontend/src:/app/src:ro
+      - ../frontend/public:/app/public:ro
+
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"

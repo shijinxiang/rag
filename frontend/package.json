@@ -1,0 +1,39 @@
+{
+  "name": "rag-agent-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Enterprise Knowledge RAG Agent — Frontend",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "format": "prettier --write .",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "^14.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-markdown": "^9.0.0",
+    "react-hot-toast": "^2.4.1",
+    "react-icons": "^5.2.0",
+    "axios": "^1.7.0",
+    "zod": "^3.23.0",
+    "zustand": "^4.5.0",
+    "next-auth": "^4.24.0",
+    "clsx": "^2.1.0",
+    "date-fns": "^3.6.0",
+    "tailwind-merge": "^2.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0",
+    "prettier": "^3.3.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.5.0"
+  }
+}

@@ -1,0 +1,52 @@
+[
+    {
+        "id": "qa-001",
+        "question": "公司年假申请流程是什么？",
+        "expected_answer": "员工需提前3个工作日通过OA系统提交年假申请，经直属领导审批后生效。年假天数按工龄计算：1-10年5天，10-20年10天，20年以上15天。",
+        "relevant_docs": ["hr-policy-2024"],
+        "relevant_chunks": [],
+        "category": "hr_policy",
+        "difficulty": "easy",
+        "tags": ["leave", "annual leave", "process"]
+    },
+    {
+        "id": "qa-002",
+        "question": "出差报销需要哪些材料？",
+        "expected_answer": "出差报销需要：1) 出差审批单 2) 交通票据（机票/火车票）3) 住宿发票 4) 出差报告。所有材料需在出差结束后15个工作日内提交。",
+        "relevant_docs": ["finance-policy-2024"],
+        "relevant_chunks": [],
+        "category": "finance",
+        "difficulty": "easy",
+        "tags": ["reimbursement", "travel", "expense"]
+    },
+    {
+        "id": "qa-003",
+        "question": "公司数据安全等级是如何划分的？",
+        "expected_answer": "公司数据安全分为四个等级：公开（可对外发布）、内部（仅限员工）、机密（限于相关部门）、绝密（限于授权人员）。不同等级对应不同的访问控制和加密要求。",
+        "relevant_docs": ["security-policy-2024"],
+        "relevant_chunks": [],
+        "category": "security",
+        "difficulty": "medium",
+        "tags": ["data security", "classification", "access control"]
+    },
+    {
+        "id": "qa-004",
+        "question": "新员工入职需要办理哪些手续？",
+        "expected_answer": "新员工入职需要：1) 提交入职材料（身份证、学历证书、离职证明）2) 签订劳动合同 3) 开通公司OA账号和企业邮箱 4) 参加入职培训 5) 领取办公设备。",
+        "relevant_docs": ["hr-policy-2024", "onboarding-guide"],
+        "relevant_chunks": [],
+        "category": "hr_policy",
+        "difficulty": "medium",
+        "tags": ["onboarding", "new employee", "HR"]
+    },
+    {
+        "id": "qa-005",
+        "question": "公司API接口的速率限制是多少？",
+        "expected_answer": "公司对外开放API的速率限制为：免费用户100次/小时，基础版1000次/小时，企业版10000次/小时。超过限制会返回429状态码。",
+        "relevant_docs": ["api-documentation-v2", "product-specs"],
+        "relevant_chunks": [],
+        "category": "product_doc",
+        "difficulty": "medium",
+        "tags": ["API", "rate limit", "technical"]
+    }
+]
