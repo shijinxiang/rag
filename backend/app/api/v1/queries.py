@@ -1,0 +1,156 @@
+"""
+=============================================================================
+Queries API — Q&A endpoints with SSE streaming support
+=============================================================================
+"""
+import json
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
+from sse_starlette.sse import EventSourceResponse
+
+from app.api.deps import get_query_service
+from app.schemas.common import ErrorResponse
+from app.schemas.query import (
+    QueryRequest,
+    QueryResponse,
+    RetrieveRequest,
+    RetrieveResponse,
+    RetrieveResult,
+)
+from app.services.query_service import QueryService
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/queries", tags=["Queries"])
+
+
+@router.post(
+    "",
+    response_model=QueryResponse,
+    responses={400: {"model": ErrorResponse}},
+)
+async def ask_question(
+    body: QueryRequest,
+    query_service: QueryService = Depends(get_query_service),
+):
+    """
+    Ask a question and get an answer with source citations.
+
+    The system will:
+    1. Retrieve relevant document chunks via vector similarity
+    2. Build a prompt with the retrieved context
+    3. Generate an answer with citations via LLM
+    """
+    result = await query_service.ask(
+        question=body.question,
+        top_k=body.top_k,
+        filters=_build_filters(body.department),
+        stream=False,
+    )
+
+    return QueryResponse(
+        query_id=result.query_id,
+        question=result.question,
+        answer=result.answer,
+        sources=result.sources,
+        retrieval_count=result.retrieval_count,
+        prompt_tokens=result.prompt_tokens,
+        completion_tokens=result.completion_tokens,
+        total_tokens=result.total_tokens,
+    )
+
+
+@router.post("/stream")
+async def ask_question_stream(
+    body: QueryRequest,
+    request: Request,
+    query_service: QueryService = Depends(get_query_service),
+):
+    """
+    Ask a question and stream the answer via Server-Sent Events (SSE).
+
+    Events:
+    - `sources`: Citation list sent before the answer starts.
+    - `token`: A chunk of generated text.
+    - `done`: End of stream with final metadata.
+    - `error`: Error information.
+    """
+    result = await query_service.ask(
+        question=body.question,
+        top_k=body.top_k,
+        filters=_build_filters(body.department),
+        stream=True,
+    )
+
+    async def event_generator():
+        try:
+            # Send sources first
+            yield {
+                "event": "sources",
+                "data": json.dumps(result.sources, ensure_ascii=False),
+            }
+
+            # Stream tokens
+            async for chunk in result.stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    token = chunk.choices[0].delta.content
+                    yield {
+                        "event": "token",
+                        "data": token,
+                    }
+
+                # Check for client disconnect
+                if await request.is_disconnected():
+                    break
+
+            # Send completion event
+            yield {
+                "event": "done",
+                "data": json.dumps(
+                    {
+                        "query_id": result.query_id,
+                        "retrieval_count": result.retrieval_count,
+                    },
+                    ensure_ascii=False,
+                ),
+
+            }
+        except Exception as exc:
+            logger.exception("Streaming error")
+            yield {
+                "event": "error",
+                "data": json.dumps({"message": str(exc)}, ensure_ascii=False),
+            }
+
+    return EventSourceResponse(event_generator())
+
+
+@router.post("/retrieve", response_model=RetrieveResponse)
+async def retrieve_only(
+    body: RetrieveRequest,
+    query_service: QueryService = Depends(get_query_service),
+):
+    """
+    Retrieve relevant documents without generating an answer.
+    Useful for debugging and evaluating retrieval quality.
+    """
+    results = await query_service.retrieve_only(
+        question=body.question,
+        top_k=body.top_k,
+        filters=_build_filters(body.department),
+    )
+
+    return RetrieveResponse(
+        query=body.question,
+        results=[RetrieveResult(**r) for r in results],
+        count=len(results),
+    )
+
+
+def _build_filters(department: str | None = None) -> dict | None:
+    """Build metadata filter dict for vector search."""
+    if department:
+        return {"department": department}
+    return None

@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply text-gray-900 antialiased;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #d1d5db;
+  border-radius: 3px;
+}
+
+/* Markdown content styling */
+.prose-custom h1,
+.prose-custom h2,
+.prose-custom h3 {
+  @apply font-semibold mt-4 mb-2;
+}
+.prose-custom h1 { @apply text-xl; }
+.prose-custom h2 { @apply text-lg; }
+.prose-custom h3 { @apply text-base; }
+.prose-custom p { @apply mb-2 leading-relaxed; }
+.prose-custom ul, .prose-custom ol { @apply ml-4 mb-2; }
+.prose-custom li { @apply mb-1; }
+.prose-custom code { @apply bg-gray-100 px-1.5 py-0.5 rounded text-sm font-mono; }
+.prose-custom pre { @apply bg-gray-900 text-gray-100 p-4 rounded-lg mb-3 overflow-x-auto; }
+.prose-custom pre code { @apply bg-transparent p-0 text-gray-100; }
+.prose-custom blockquote {
+  @apply border-l-4 border-primary-400 pl-4 italic text-gray-600 my-2;
+}
+.prose-custom a { @apply text-primary-600 underline; }
+.prose-custom table { @apply w-full border-collapse mb-3; }
+.prose-custom th { @apply bg-gray-100 border border-gray-300 px-3 py-2 text-left font-semibold; }
+.prose-custom td { @apply border border-gray-300 px-3 py-2; }
