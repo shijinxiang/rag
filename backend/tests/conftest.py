@@ -141,8 +141,86 @@ def _mock_openai(monkeypatch):
         "app.services.generation_service.AsyncOpenAI",
         lambda *a, **kw: mock_client,
     )
+    monkeypatch.setattr(
+        "app.rag.query_rewriter.AsyncOpenAI",
+        lambda *a, **kw: mock_client,
+    )
 
     return mock_client
+
+
+# ---------------------------------------------------------------------------
+# 3b. Mock external Phase 2 dependencies (cohere, BGE, Jina)
+# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def _mock_phase2_deps(monkeypatch):
+    """Mock Cohere / BGE / Jina clients so tests run without external APIs.
+
+    Each mock is idempotent — if the library isn't installed the monkeypatch
+    silently does nothing (import-time guard).
+    """
+
+    # --- mock cohere.AsyncClient -----------------------------------------
+    try:
+        import cohere  # noqa: F401
+    except ImportError:
+        cohere = None
+
+    if cohere is not None:
+        mock_cohere_client = MagicMock()
+        fake_rerank_result = MagicMock()
+        fake_rerank_result.index = 0
+        fake_rerank_result.relevance_score = 0.95
+        mock_rerank_response = MagicMock()
+        mock_rerank_response.results = [fake_rerank_result]
+        mock_cohere_client.rerank = AsyncMock(return_value=mock_rerank_response)
+        monkeypatch.setattr(
+            "cohere.AsyncClient",
+            lambda *a, **kw: mock_cohere_client,
+        )
+
+    # --- mock sentence_transformers.CrossEncoder -------------------------
+    try:
+        import sentence_transformers  # noqa: F401
+    except ImportError:
+        sentence_transformers = None
+
+    if sentence_transformers is not None:
+        mock_cross_encoder = MagicMock()
+        # predict() returns a numpy-like array of scores
+        mock_cross_encoder.predict = MagicMock(return_value=[0.9, 0.8, 0.7, 0.6, 0.5])
+        monkeypatch.setattr(
+            "sentence_transformers.CrossEncoder",
+            lambda *a, **kw: mock_cross_encoder,
+        )
+
+    # --- mock httpx.AsyncClient for Jina API -----------------------------
+    try:
+        import httpx  # noqa: F401
+    except ImportError:
+        httpx = None  # type: ignore[assignment]
+
+    if httpx is not None:
+        _original_async_client = httpx.AsyncClient
+
+        class _MockJinaAsyncClient(_original_async_client):
+            """Intercept POSTs to api.jina.ai and return a fake rerank result."""
+
+            async def post(self, url, **kwargs):
+                if "api.jina.ai" in str(url):
+                    mock_resp = MagicMock()
+                    mock_resp.raise_for_status = MagicMock()
+                    mock_resp.json = MagicMock(return_value={
+                        "results": [
+                            {"index": 0, "relevance_score": 0.95},
+                            {"index": 1, "relevance_score": 0.82},
+                            {"index": 2, "relevance_score": 0.71},
+                        ]
+                    })
+                    return mock_resp
+                return await super().post(url, **kwargs)
+
+        monkeypatch.setattr("httpx.AsyncClient", _MockJinaAsyncClient)
 
 
 # ---------------------------------------------------------------------------

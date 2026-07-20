@@ -52,6 +52,9 @@ markdown>=3.0,<4.0
 unstructured>=0.14.0,<1.0.0
 python-docx>=1.0.0,<2.0.0
 
+# Reranker
+cohere>=5.0.0,<6.0.0
+
 # Embedding (for local reranker)
 sentence-transformers>=3.0.0,<4.0.0
 

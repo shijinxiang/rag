@@ -75,8 +75,17 @@ class Settings(BaseSettings):
     RAG_CHUNK_SIZE: int = 1000
     RAG_CHUNK_OVERLAP: int = 200
     RAG_HYBRID_SEARCH_ENABLED: bool = False  # Enable in stage 2
+    RAG_HYBRID_TOP_K: int = 20  # Documents recalled per path in hybrid mode
     RAG_RERANKER_ENABLED: bool = False  # Enable in stage 2
     RAG_RERANKER_PROVIDER: str = "cohere"  # cohere | bge | jina
+    RAG_COHERE_API_KEY: Optional[str] = None
+    RAG_JINA_API_KEY: Optional[str] = None
+
+    # ---- Query Rewrite ----
+    RAG_QUERY_REWRITE_ENABLED: bool = False
+    RAG_MULTI_QUERY_ENABLED: bool = False
+    RAG_MULTI_QUERY_COUNT: int = 3
+    RAG_QUERY_REWRITE_MODEL: str = "gpt-4o-mini"
 
     # ---- LangSmith ----
     LANGSMITH_ENABLED: bool = False
