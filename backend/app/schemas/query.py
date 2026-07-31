@@ -16,6 +16,14 @@ class QueryRequest(BaseModel):
     stream: bool = Field(default=False, description="是否使用 SSE 流式返回")
 
 
+class AgentQueryRequest(BaseModel):
+    """Request body for agent-based Q&A queries."""
+    question: str = Field(..., min_length=1, max_length=5000, description="用户问题")
+    top_k: Optional[int] = Field(default=None, ge=1, le=50, description="检索文档数量")
+    department: Optional[str] = Field(default=None, description="按部门过滤")
+    use_agent: bool = Field(default=True, description="是否使用 LangGraph Agent")
+
+
 class SourceCitation(BaseModel):
     """A single source citation in the answer."""
     index: int

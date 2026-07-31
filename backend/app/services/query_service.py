@@ -21,6 +21,7 @@ from app.config import settings
 from app.rag.reranker import Reranker
 from app.rag.query_rewriter import QueryRewriter
 from app.rag.retriever import Retriever
+from app.agent.graph import get_agent_graph
 from app.services.generation_service import (
     ContextDoc,
     GenerationResult,
@@ -166,6 +167,77 @@ class QueryService:
         )
 
         return result
+
+    async def ask_with_agent(
+        self,
+        question: str,
+        user_id: Optional[str] = None,
+        filters: Optional[dict] = None,
+        top_k: Optional[int] = None,
+    ) -> "QueryResult":
+        """Execute a Q&A query using the LangGraph Agent.
+
+        The agent classifies the question intent, runs the appropriate
+        pipeline (retrieval QA, general chat, or document operation),
+        and returns the result with citations.
+        """
+        k = top_k or settings.RAG_TOP_K
+        graph = get_agent_graph()
+
+        # Initial state
+        state: dict = {
+            "question": question,
+            "user_id": user_id,
+            "filters": filters,
+            "top_k": k,
+            "classification": "retrieval_qa",
+            "rewritten_query": None,
+            "retrieved_docs": [],
+            "context": "",
+            "answer": None,
+            "citations": [],
+            "needs_review": False,
+            "review_approved": False,
+            "messages": [],
+            "error": None,
+        }
+
+        try:
+            # Run the agent graph
+            final_state = await graph.ainvoke(state)
+
+            answer = final_state.get("answer") or ""
+            citations = final_state.get("citations") or []
+            retrieval_count = len(final_state.get("retrieved_docs", []))
+
+            logger.info(
+                "Agent query '%s': class=%s, %d docs, %d chars",
+                question[:50],
+                final_state.get("classification", "?"),
+                retrieval_count,
+                len(answer),
+            )
+
+            return QueryResult(
+                query_id=str(uuid.uuid4()),
+                question=question,
+                answer=answer,
+                sources=citations,
+                retrieval_count=retrieval_count,
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+            )
+        except Exception as exc:
+            logger.exception("Agent query failed — falling back to simple pipeline.")
+            # Fallback to the standard pipeline
+            return await self.ask(
+                question=question,
+                user_id=user_id,
+                filters=filters,
+                top_k=top_k,
+                stream=False,
+            )
 
     async def retrieve_only(
         self,

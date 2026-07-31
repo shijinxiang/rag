@@ -21,7 +21,9 @@ Enterprise Knowledge RAG Agent 是一个企业级 RAG（检索增强生成）智
 | 能力 | 描述 |
 |---|---|
 | 📄 **多格式文档** | PDF, Markdown, TXT, DOCX 上传与解析 |
-| 🔍 **混合检索** | Dense (语义) + Sparse (关键词) + Reranker |
+| 🔍 **混合检索** | Dense (语义) + Sparse (BM25/关键词) + RRF 融合 |
+| 🎯 **重排序** | Cohere / BGE / Jina Cross-Encoder 精排 |
+| ✏️ **查询重写** | LLM 缩写展开 + 多查询生成 |
 | 🤖 **Agent 路由** | 自动判断问题类型，调用工具，多步推理 |
 | 🔗 **引用溯源** | 每段答案可追溯到源文档、页码、chunk |
 | 🔐 **权限隔离** | JWT + RBAC，按部门/角色过滤可检索文档 |
@@ -88,9 +90,11 @@ open http://localhost:8000/docs   # Swagger API docs
 | Frontend | Next.js 14, React 18, Tailwind CSS |
 | Backend | FastAPI, Python 3.12 |
 | Agent | LangGraph, LangChain |
-| LLM | OpenAI Responses API (`gpt-5.5`) |
+| LLM | OpenAI Responses API (`gpt-4o`) |
 | Embedding | `text-embedding-3-small` (1536d) |
 | Vector DB | PostgreSQL + pgvector (→ Milvus) |
+| Sparse Search | PostgreSQL tsvector + pg_trgm (BM25) |
+| Reranker | Cohere / BGE / Jina |
 | Relational DB | PostgreSQL 16 |
 | Cache/Queue | Redis + Celery |
 | Storage | MinIO (S3-compatible) |
@@ -105,12 +109,12 @@ open http://localhost:8000/docs   # Swagger API docs
 ├── backend/              # FastAPI application
 │   ├── app/
 │   │   ├── api/v1/       # REST API endpoints
-│   │   ├── agent/        # LangGraph agent definition
+│   │   ├── agent/        # LangGraph agent (state, nodes, tools, graph)
 │   │   ├── core/         # Security, permissions, logging
 │   │   ├── db/           # Database session, vector store, migrations
 │   │   ├── middleware/    # Audit, CORS, rate limiting
 │   │   ├── models/       # SQLAlchemy ORM models
-│   │   ├── rag/          # Document loader, splitter, retriever, reranker
+│   │   ├── rag/          # Document loader, splitter, retriever, reranker, fusion, BM25
 │   │   ├── schemas/      # Pydantic request/response schemas
 │   │   ├── services/     # Business logic layer
 │   │   └── tasks/        # Celery async tasks
@@ -137,12 +141,11 @@ See [docs/api.md](docs/api.md) for the full API specification.
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/v1/health` | Health check |
-| `POST` | `/api/v1/auth/register` | Register |
-| `POST` | `/api/v1/auth/login` | Login |
 | `POST` | `/api/v1/documents/upload` | Upload document |
 | `POST` | `/api/v1/queries` | Ask a question |
 | `POST` | `/api/v1/queries/stream` | Ask a question (SSE stream) |
-| `POST` | `/api/v1/eval/run` | Run evaluation |
+| `POST` | `/api/v1/queries/retrieve` | Debug-only retrieval |
+| `POST` | `/api/v1/queries/agent` | Ask with LangGraph Agent |
 
 ## RAG Evaluation Results
 
@@ -170,7 +173,7 @@ The system is evaluated on a Golden Dataset of 50-100 Q&A pairs across 5 categor
 
 ## Implementation Status
 
-### Phase 1: Basic RAG MVP — implemented, verification in progress
+### Phase 1: Basic RAG MVP — ✅ completed
 The core RAG pipeline is implemented and tested (13 tests, 69% coverage).  We can:
 - Upload .txt / .md / .pdf / .docx documents
 - Parse, chunk, and generate OpenAI embeddings (text-embedding-3-small)
@@ -180,12 +183,17 @@ The core RAG pipeline is implemented and tested (13 tests, 69% coverage).  We ca
 - Return source citations per answer (doc title, page number, chunk excerpt, similarity score)
 - Frontend chat page (Next.js) renders answers + citation cards
 
-### Currently NOT yet implemented (planned for future phases)
+### Phase 2: Retrieval Quality — ✅ completed (31 tests, 66% coverage)
+Upgraded retrieval with three quality features:
+- **Hybrid Search**: Dense (pgvector cosine) + Sparse (PostgreSQL BM25 with ts_rank + pg_trgm) via RRF fusion
+- **Cross-Encoder Reranker**: Cohere Rerank API / BGE local / Jina API — configurable provider
+- **LLM Query Rewrite**: Abbreviation expansion + multi-query generation (gpt-4o-mini)
+- All features gated by config flags, default disabled, backward-compatible
+
+### NOT yet implemented (planned for future phases)
 - JWT / RBAC authentication
-- Hybrid Search (BM25 + dense)
-- Reranker (Cohere / BGE / Jina)
-- LangGraph Agent routing & tool calling
-- Human-in-the-loop review
+- Full tool calling (SQL, calculate, etc.)
+- Human-in-the-loop review (interrupt-based)
 - Celery async document processing
 - LangSmith / Prometheus / Grafana monitoring
 - Ragas automated evaluation
@@ -195,7 +203,7 @@ The core RAG pipeline is implemented and tested (13 tests, 69% coverage).  We ca
 
 - [x] **Phase 0**: Project skeleton, Git init, config files
 - [x] **Phase 1**: Basic RAG MVP (upload → embed → retrieve → answer)
-- [ ] **Phase 2**: Retrieval quality (Hybrid Search + Reranker + Query Rewrite)
+- [x] **Phase 2**: Retrieval quality (Hybrid Search + Reranker + Query Rewrite)
 - [ ] **Phase 3**: Agent (LangGraph routing + tool calling + human-in-the-loop)
 - [ ] **Phase 4**: Enterprise (JWT/RBAC + async tasks + audit logging)
 - [ ] **Phase 5**: Observability & Evaluation (Ragas + LangSmith + Grafana)

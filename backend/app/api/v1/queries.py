@@ -13,6 +13,7 @@ from sse_starlette.sse import EventSourceResponse
 from app.api.deps import get_query_service
 from app.schemas.common import ErrorResponse
 from app.schemas.query import (
+    AgentQueryRequest,
     QueryRequest,
     QueryResponse,
     RetrieveRequest,
@@ -146,6 +147,38 @@ async def retrieve_only(
         query=body.question,
         results=[RetrieveResult(**r) for r in results],
         count=len(results),
+    )
+
+
+@router.post("/agent", response_model=QueryResponse)
+async def ask_agent(
+    body: AgentQueryRequest,
+    query_service: QueryService = Depends(get_query_service),
+):
+    """
+    Ask a question using the LangGraph Agent.
+
+    The agent will:
+    1. Classify the question intent (retrieval_qa, general_chat, document_operation)
+    2. For retrieval_qa: rewrite → hybrid retrieve → rerank → generate
+    3. For general_chat: answer directly without retrieval
+    4. Return answer with source citations
+    """
+    result = await query_service.ask_with_agent(
+        question=body.question,
+        top_k=body.top_k,
+        filters=_build_filters(body.department),
+    )
+
+    return QueryResponse(
+        query_id=result.query_id,
+        question=result.question,
+        answer=result.answer,
+        sources=result.sources,
+        retrieval_count=result.retrieval_count,
+        prompt_tokens=result.prompt_tokens,
+        completion_tokens=result.completion_tokens,
+        total_tokens=result.total_tokens,
     )
 
 

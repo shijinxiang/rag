@@ -17,5 +17,5 @@ router.include_router(health_router)
 # Documents
 router.include_router(documents_router)
 
-# Q&A
+# Q&A (includes agent endpoint)
 router.include_router(queries_router)
