@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FiLogOut, FiRefreshCw, FiTrash2, FiUpload, FiCheck, FiX } from "react-icons/fi";
-import { authenticate, currentUser, logout, listDocuments, uploadDocument, deleteDocument, documentAction, reviews, audits, decideReview, type UserInfo, type DocumentInfo, type Review, type Audit } from "@/lib/api";
+import { authenticate, currentUser, logout, listDocuments, uploadDocument, deleteDocument, documentAction, reviews, audits, decideReview, getOpenAISettings, updateOpenAISettings, type UserInfo, type DocumentInfo, type Review, type Audit, type OpenAISettings } from "@/lib/api";
 
 export default function Workspace({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -15,12 +15,13 @@ export default function Workspace({ children }: { children: React.ReactNode }) {
   const [reviewList, setReviewList] = useState<Review[]>([]);
   const [auditList, setAuditList] = useState<Audit[]>([]);
   const [uploadDepartment, setUploadDepartment] = useState("");
+  const [openAISettings, setOpenAISettings] = useState<OpenAISettings | null>(null);
 
   useEffect(() => { currentUser().then(setUser).catch(() => {}).finally(() => setReady(true)); }, []);
 
   async function reload() {
     if (tab === "documents") setDocuments((await listDocuments(1, 100)).items);
-    if (tab === "admin") { setReviewList(await reviews()); setAuditList(await audits()); }
+    if (tab === "admin") { setReviewList(await reviews()); setAuditList(await audits()); setOpenAISettings(await getOpenAISettings()); }
   }
 
   useEffect(() => {
@@ -77,6 +78,7 @@ export default function Workspace({ children }: { children: React.ReactNode }) {
       </tbody></table>{!documents.length && <p className="py-8 text-center text-gray-500">暂无文档</p>}</div>
     </section>}
     {tab === "admin" && user.role === "admin" && <section><h2 className="text-lg font-semibold mb-4">待审核</h2>{reviewList.map((item) => <div key={item.id} className="flex flex-wrap gap-4 justify-between border-b py-3 text-sm"><span className="break-all">{item.action} · {item.payload.document_id}</span><div className="flex gap-4"><button title="批准" aria-label="批准" disabled={busy} onClick={() => void action(() => decideReview(item.id, "approve"))}><FiCheck /></button><button title="拒绝" aria-label="拒绝" disabled={busy} onClick={() => void action(() => decideReview(item.id, "reject"))}><FiX /></button></div></div>)}{!reviewList.length && <p className="text-gray-500 text-sm">暂无待审核请求</p>}
+      <h2 className="text-lg font-semibold mt-8 mb-4">模型配置</h2><div className="border rounded-lg p-4 max-w-xl"><p className="text-sm text-gray-600 mb-3">OpenAI API Key 仅保存到服务器 .env，页面不会显示完整密钥。</p><form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); const value = new FormData(e.currentTarget).get("api_key") as string; void action(async () => { const next = await updateOpenAISettings(value); setOpenAISettings(next); e.currentTarget.reset(); }); }}><input name="api_key" type="password" autoComplete="new-password" required minLength={20} placeholder="sk-..." className="flex-1 min-w-56 border rounded-md px-3 py-2 text-sm"/><button className="bg-primary-600 text-white rounded-md px-4 py-2 text-sm" disabled={busy}>保存 Key</button></form><p className="text-xs mt-3" role="status">当前状态：{openAISettings?.configured ? <span className="text-green-700">已配置（{openAISettings.masked}）</span> : <span className="text-amber-700">未配置</span>}</p>{openAISettings?.restart_required && <p className="text-xs text-amber-700 mt-1">配置已保存。请重启 backend 和 celery-worker 后开始真实向量化。</p>}</div>
       <h2 className="text-lg font-semibold mt-8 mb-4">审计日志</h2><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead><tr><th className="p-2">时间</th><th className="p-2">动作</th><th className="p-2">资源</th><th className="p-2">结果</th></tr></thead><tbody>{auditList.map((item) => <tr key={item.id} className="border-b"><td className="p-2 whitespace-nowrap">{new Date(item.created_at).toLocaleString()}</td><td className="p-2">{item.action}</td><td className="p-2 break-all">{item.resource_id}</td><td className="p-2">{item.outcome}</td></tr>)}</tbody></table></div>
     </section>}
   </>;

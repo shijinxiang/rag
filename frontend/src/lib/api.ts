@@ -299,6 +299,9 @@ export interface Audit { id: string; action: string; outcome: string; created_at
 export async function reviews(): Promise<Review[]> { return request("/admin/reviews"); }
 export async function audits(): Promise<Audit[]> { return request("/admin/audit-logs"); }
 export async function decideReview(id: string, decision: "approve" | "reject") { return request(`/admin/reviews/${id}/${decision}`, { method: "POST", body: JSON.stringify({}) }); }
+export interface OpenAISettings { configured: boolean; masked: string | null; restart_required?: boolean; }
+export async function getOpenAISettings(): Promise<OpenAISettings> { return request("/admin/settings/openai"); }
+export async function updateOpenAISettings(api_key: string): Promise<OpenAISettings> { return request("/admin/settings/openai", { method: "PUT", body: JSON.stringify({ api_key }) }); }
 
 // ============================================================================
 // Retrieve Only (Debug)

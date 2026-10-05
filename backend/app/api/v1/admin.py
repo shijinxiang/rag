@@ -1,7 +1,11 @@
 """Administrator-only audit and human review endpoints."""
+import os
+import re
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,10 +22,53 @@ from app.tasks.celery_app import process_document
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 
+class OpenAIKeyUpdate(BaseModel):
+    api_key: str = Field(min_length=20, max_length=500)
+
+
+def _key_status() -> dict[str, object]:
+    value = os.getenv("OPENAI_API_KEY", "")
+    configured = bool(value and not value.startswith("sk-local-placeholder") and not value.startswith("sk-your-"))
+    return {"configured": configured, "masked": f"{value[:5]}...{value[-4:]}" if configured else None}
+
+
 def require_admin(user: User = Depends(get_authenticated_user)) -> User:
     if user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
     return user
+
+
+@router.get("/settings/openai", response_model=dict)
+async def openai_settings(_: User = Depends(require_admin)):
+    return _key_status()
+
+
+@router.put("/settings/openai", response_model=dict)
+async def update_openai_settings(payload: OpenAIKeyUpdate, _: User = Depends(require_admin)):
+    key = payload.api_key.strip()
+    if not re.fullmatch(r"sk-[A-Za-z0-9_\-\.]{16,}", key):
+        raise HTTPException(status_code=422, detail="请输入有效的 OpenAI API Key")
+    env_path = Path(os.getenv("RAG_ENV_FILE", ".env"))
+    try:
+        lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
+        replacement = f"OPENAI_API_KEY={key}"
+        found = False
+        output: list[str] = []
+        for line in lines:
+            if line.startswith("OPENAI_API_KEY="):
+                output.append(replacement)
+                found = True
+            else:
+                output.append(line)
+        if not found:
+            output.append(replacement)
+        temp = env_path.with_suffix(env_path.suffix + ".tmp")
+        temp.write_text("\n".join(output) + "\n", encoding="utf-8")
+        temp.replace(env_path)
+        os.environ["OPENAI_API_KEY"] = key
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail=f"无法写入服务器配置文件: {exc}") from exc
+    return {**_key_status(), "restart_required": True}
 
 
 @router.get("/audit-logs", response_model=list[AuditLogRead])
