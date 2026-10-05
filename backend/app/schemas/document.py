@@ -5,7 +5,6 @@ Document Pydantic Schemas
 """
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -18,10 +17,10 @@ class DocumentRead(BaseModel):
     file_size: int
     status: str
     version: int
-    department: Optional[str] = None
+    department: str | None = None
     access_level: int = 0
     chunk_count: int = 0
-    error_message: Optional[str] = None
+    error_message: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -53,7 +52,7 @@ class DocumentChunkRead(BaseModel):
     id: uuid.UUID
     chunk_index: int
     content: str
-    page_number: Optional[int] = None
+    page_number: int | None = None
     chunk_metadata: dict = Field(default_factory=dict)
     created_at: datetime
 

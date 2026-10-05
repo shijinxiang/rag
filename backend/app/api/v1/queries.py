@@ -6,11 +6,11 @@ Queries API — Q&A endpoints with SSE streaming support
 import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, Request
 from sse_starlette.sse import EventSourceResponse
 
-from app.api.deps import get_query_service
+from app.api.deps import get_authenticated_user, get_query_service, user_filters
+from app.models.user import User
 from app.schemas.common import ErrorResponse
 from app.schemas.query import (
     AgentQueryRequest,
@@ -35,6 +35,7 @@ router = APIRouter(prefix="/queries", tags=["Queries"])
 async def ask_question(
     body: QueryRequest,
     query_service: QueryService = Depends(get_query_service),
+    user: User = Depends(get_authenticated_user),
 ):
     """
     Ask a question and get an answer with source citations.
@@ -47,9 +48,12 @@ async def ask_question(
     result = await query_service.ask(
         question=body.question,
         top_k=body.top_k,
-        filters=_build_filters(body.department),
+        filters=user_filters(user),
         stream=False,
     )
+    from app.core.metrics import QUERY_REQUESTS_TOTAL, RETRIEVAL_DOCUMENTS
+    QUERY_REQUESTS_TOTAL.labels(status="success").inc()
+    RETRIEVAL_DOCUMENTS.observe(result.retrieval_count)
 
     return QueryResponse(
         query_id=result.query_id,
@@ -60,6 +64,7 @@ async def ask_question(
         prompt_tokens=result.prompt_tokens,
         completion_tokens=result.completion_tokens,
         total_tokens=result.total_tokens,
+        review_status=result.review_status,
     )
 
 
@@ -68,6 +73,7 @@ async def ask_question_stream(
     body: QueryRequest,
     request: Request,
     query_service: QueryService = Depends(get_query_service),
+    user: User = Depends(get_authenticated_user),
 ):
     """
     Ask a question and stream the answer via Server-Sent Events (SSE).
@@ -81,9 +87,11 @@ async def ask_question_stream(
     result = await query_service.ask(
         question=body.question,
         top_k=body.top_k,
-        filters=_build_filters(body.department),
+        filters=user_filters(user),
         stream=True,
     )
+    from app.core.metrics import QUERY_REQUESTS_TOTAL, RETRIEVAL_DOCUMENTS
+    RETRIEVAL_DOCUMENTS.observe(result.retrieval_count)
 
     async def event_generator():
         try:
@@ -104,9 +112,11 @@ async def ask_question_stream(
 
                 # Check for client disconnect
                 if await request.is_disconnected():
-                    break
+                    QUERY_REQUESTS_TOTAL.labels(status="cancelled").inc()
+                    return
 
             # Send completion event
+            QUERY_REQUESTS_TOTAL.labels(status="success").inc()
             yield {
                 "event": "done",
                 "data": json.dumps(
@@ -120,6 +130,7 @@ async def ask_question_stream(
             }
         except Exception as exc:
             logger.exception("Streaming error")
+            QUERY_REQUESTS_TOTAL.labels(status="failure").inc()
             yield {
                 "event": "error",
                 "data": json.dumps({"message": str(exc)}, ensure_ascii=False),
@@ -132,6 +143,7 @@ async def ask_question_stream(
 async def retrieve_only(
     body: RetrieveRequest,
     query_service: QueryService = Depends(get_query_service),
+    user: User = Depends(get_authenticated_user),
 ):
     """
     Retrieve relevant documents without generating an answer.
@@ -140,8 +152,11 @@ async def retrieve_only(
     results = await query_service.retrieve_only(
         question=body.question,
         top_k=body.top_k,
-        filters=_build_filters(body.department),
+        filters=user_filters(user),
     )
+    from app.core.metrics import QUERY_REQUESTS_TOTAL, RETRIEVAL_DOCUMENTS
+    QUERY_REQUESTS_TOTAL.labels(status="success").inc()
+    RETRIEVAL_DOCUMENTS.observe(len(results))
 
     return RetrieveResponse(
         query=body.question,
@@ -154,6 +169,7 @@ async def retrieve_only(
 async def ask_agent(
     body: AgentQueryRequest,
     query_service: QueryService = Depends(get_query_service),
+    user: User = Depends(get_authenticated_user),
 ):
     """
     Ask a question using the LangGraph Agent.
@@ -167,8 +183,11 @@ async def ask_agent(
     result = await query_service.ask_with_agent(
         question=body.question,
         top_k=body.top_k,
-        filters=_build_filters(body.department),
+        filters=user_filters(user),
     )
+    from app.core.metrics import QUERY_REQUESTS_TOTAL, RETRIEVAL_DOCUMENTS
+    QUERY_REQUESTS_TOTAL.labels(status="success").inc()
+    RETRIEVAL_DOCUMENTS.observe(result.retrieval_count)
 
     return QueryResponse(
         query_id=result.query_id,
@@ -179,6 +198,7 @@ async def ask_agent(
         prompt_tokens=result.prompt_tokens,
         completion_tokens=result.completion_tokens,
         total_tokens=result.total_tokens,
+        review_status=result.review_status,
     )
 
 

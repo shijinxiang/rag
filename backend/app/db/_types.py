@@ -4,7 +4,7 @@ Cross-database compatible types — PostgreSQL types in production,
 SQLite-compatible types in tests.
 =============================================================================
 """
-from sqlalchemy import JSON, Float
+from sqlalchemy import JSON
 from sqlalchemy.dialects.postgresql import JSONB
 
 
@@ -18,9 +18,7 @@ def _is_sqlite() -> bool:
 
 def JSONCompat():
     """Return JSONB on PostgreSQL or plain JSON on SQLite."""
-    if _is_sqlite():
-        return JSON(none_as_null=True)
-    return JSONB()
+    return JSONB().with_variant(JSON(none_as_null=True), "sqlite")
 
 
 def NullableVector(dim: int):
@@ -30,9 +28,7 @@ def NullableVector(dim: int):
     support ANN search, but test code that doesn't rely on vector similarity
     can still run.
     """
-    if _is_sqlite():
-        return Float()
     # Lazy import so pgvector isn't required on SQLite-only test runs
     from pgvector.sqlalchemy import Vector
 
-    return Vector(dim)
+    return Vector(dim).with_variant(JSON(), "sqlite")

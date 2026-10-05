@@ -5,7 +5,6 @@ Document Loader — Multi-format document loading via LangChain
 Supports: PDF, Markdown, TXT, DOCX
 """
 from pathlib import Path
-from typing import Optional
 
 from langchain_community.document_loaders import (
     PyPDFLoader,
@@ -41,7 +40,7 @@ class DocumentLoader:
     def load_document(
         cls,
         file_path: str,
-        file_type: Optional[str] = None,
+        file_type: str | None = None,
     ) -> list[LCDocument]:
         """
         Load a document file and return a list of LangChain Documents.
@@ -76,7 +75,7 @@ class DocumentLoader:
         return documents
 
     @classmethod
-    def load_and_get_text(cls, file_path: str, file_type: Optional[str] = None) -> str:
+    def load_and_get_text(cls, file_path: str, file_type: str | None = None) -> str:
         """Load a document and return the concatenated full text."""
         docs = cls.load_document(file_path, file_type)
         return "\n\n".join(doc.page_content for doc in docs)

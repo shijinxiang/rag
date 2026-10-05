@@ -10,15 +10,16 @@ function for conditional routing.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from openai import AsyncOpenAI
 
-from app.config import settings
-from app.rag.retriever import Retriever
-from app.rag.query_rewriter import QueryRewriter
-from app.services.generation_service import ContextDoc, GenerationService
 from app.agent.state import AgentState
+from app.agent.tools import search_knowledge
+from app.config import settings
+from app.rag.query_rewriter import QueryRewriter
+from app.rag.retriever import Retriever
+from app.services.generation_service import ContextDoc, GenerationService
 
 logger = logging.getLogger(__name__)
 
@@ -186,6 +187,9 @@ async def generate_node(state: AgentState) -> dict[str, Any]:
     question = state.get("question", "")
     docs = state.get("retrieved_docs", [])
 
+    if state.get("review_status") == "pending":
+        return {"answer": "该操作需要人工审核后才能执行。", "citations": []}
+
     if docs:
         # Build ContextDoc list for the generation service
         contexts = [
@@ -244,17 +248,36 @@ async def review_node(state: AgentState) -> dict[str, Any]:
     question = state.get("question", "")
     classification = state.get("classification", "")
 
-    if state.get("needs_review"):
+    if state.get("needs_review") or state.get("classification") == "document_operation":
         logger.info(
             "Agent action requires review: question='%s', class='%s'",
             question[:50],
             classification,
         )
-        # In production: raise an interrupt / suspend here
-        # For now, auto-approve
-        return {"review_approved": True}
+        approved = state.get("review_status") == "approved"
+        return {
+            "review_approved": approved,
+            "review_status": "approved" if approved else "pending",
+            "answer": "该操作需要人工审核后才能执行。",
+        }
 
-    return {"review_approved": True}
+    return {"review_approved": True, "review_status": "not_required"}
+
+
+async def tool_node(state: AgentState) -> dict[str, Any]:
+    """Execute only allow-listed, read-only tools and retain an audit record."""
+    question = state.get("question", "")
+    classification = state.get("classification")
+    if classification != "retrieval_qa":
+        return {"tool_calls": [], "tool_result": None}
+
+    result = await search_knowledge.coroutine(
+        query=question,
+        top_k=state.get("top_k", 5),
+        department=(state.get("filters") or {}).get("department"),
+    )
+    call = {"name": "search_knowledge", "arguments": {"query": question}, "result": result}
+    return {"tool_calls": [call], "tool_result": result}
 
 
 # ---------------------------------------------------------------------------
@@ -276,12 +299,12 @@ def route_after_classify(state: AgentState) -> str:
 
 
 def route_after_retrieve(state: AgentState) -> str:
-    """After retrieval, always generate."""
-    return "generate"
+    """Run the allow-listed read-only tool stage before generation."""
+    return "tools"
 
 
 def route_after_review(state: AgentState) -> str:
     """After review, generate or end."""
     if state.get("review_approved"):
-        return "generate"
+        return "tools" if state.get("classification") == "retrieval_qa" else "generate"
     return "__end__"

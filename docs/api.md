@@ -6,7 +6,9 @@ http://localhost:8000/api/v1
 ```
 
 ## Authentication
-All endpoints except `/health`, `/auth/login`, `/auth/register` require a Bearer JWT token:
+All application endpoints except `/health`, `/auth/login`, `/auth/register`, and
+`/auth/refresh` require a Bearer JWT token. Refresh accepts a refresh token in
+the JSON request body:
 ```
 Authorization: Bearer <access_token>
 ```
@@ -16,7 +18,7 @@ Authorization: Bearer <access_token>
 ### Health
 | Method | Path | Description |
 |---|---|---|
-| GET | `/health` | Health check + component status |
+| GET | `/health` | Application status/version/environment |
 
 ### Auth
 | Method | Path | Description |
@@ -24,76 +26,64 @@ Authorization: Bearer <access_token>
 | POST | `/auth/register` | Register new user |
 | POST | `/auth/login` | Login, returns access + refresh tokens |
 | POST | `/auth/refresh` | Refresh access token |
-| POST | `/auth/logout` | Invalidate refresh token |
+| GET | `/auth/me` | Current database user and role |
 
-### Users
-| Method | Path | Description |
-|---|---|---|
-| GET | `/users/me` | Get current user profile |
-| PATCH | `/users/me` | Update current user profile |
-| GET | `/users` | List users (admin only) |
-| PATCH | `/users/{id}/roles` | Update user roles (admin only) |
+Registration creates an employee. Roles are assigned using the trusted
+`python -m app.manage_user` CLI. Access tokens expire after 30 minutes and
+refresh tokens after 7 days by default. Invalid/expired tokens return 401;
+authenticated users without permission receive 403. Logout clears browser
+tokens; refresh tokens are stateless, and deactivated users cannot refresh.
 
 ### Documents
 | Method | Path | Description |
 |---|---|---|
 | POST | `/documents/upload` | Upload document (PDF/MD/TXT/DOCX) |
 | GET | `/documents` | List documents (with filters) |
-| GET | `/documents/{id}` | Get document detail + chunks |
+| GET | `/documents/{id}` | Document metadata, processing status, failure details |
+| GET | `/documents/{id}/chunks` | Document chunks |
 | DELETE | `/documents/{id}` | Delete document + chunks + embeddings |
-| POST | `/documents/{id}/reindex` | Rebuild index for a document |
-| GET | `/documents/{id}/versions` | List document versions |
+| POST | `/documents/{id}/retry` | Retry a failed document (202) |
+| POST | `/documents/{id}/review` | Request deletion review (202) |
+
+Upload returns 201 with `pending` status. Managers can upload/retry/delete only
+within their department; administrators can manage all departments. Employees
+can read and request review for documents within their department. Department
+is enforced for queries regardless of a client-supplied filter.
 
 ### Queries (Q&A)
 | Method | Path | Description |
 |---|---|---|
 | POST | `/queries` | Submit a question (returns answer + sources) |
 | POST | `/queries/stream` | Submit a question (SSE streaming) |
-| GET | `/queries` | List query history |
-| GET | `/queries/{id}` | Get query detail + retrieval logs |
+| POST | `/queries/retrieve` | Retrieval-only response |
+| POST | `/queries/agent` | LangGraph agent response |
 
 ### Admin
 | Method | Path | Description |
 |---|---|---|
-| GET | `/admin/stats` | Dashboard statistics |
 | GET | `/admin/audit-logs` | Audit log list |
-| GET | `/admin/usage` | Token usage & cost report |
+| GET | `/admin/reviews` | Persistent review requests (default pending) |
+| POST | `/admin/reviews/{id}/approve` | Approve and execute deletion |
+| POST | `/admin/reviews/{id}/reject` | Reject request |
 
-### Evaluation
-| Method | Path | Description |
-|---|---|---|
-| POST | `/eval/run` | Run evaluation on Golden Dataset |
-| GET | `/eval/results` | List evaluation results |
-| GET | `/eval/results/{id}` | Get detailed evaluation result |
-| GET | `/eval/dataset` | List Golden Dataset Q&A pairs |
-| POST | `/eval/dataset` | Add Q&A pair to Golden Dataset |
-
-### Feedback
-| Method | Path | Description |
-|---|---|---|
-| POST | `/feedback` | Submit feedback (thumbs up/down) on an answer |
+Administrator role is required. Repeated decisions return 409. Both decision
+endpoints accept `{"note": "optional reason"}`. Evaluation runs from
+`scripts/run_evaluation.py`; `/metrics` exposes Prometheus metrics.
 
 ## Response Format
 
 ### Success
 ```json
-{
-  "status": "success",
-  "data": { ... }
-}
+{"status": "healthy", "version": "1.0.0", "environment": "development"}
 ```
 
 ### Error
 ```json
-{
-  "status": "error",
-  "error": {
-    "code": "NOT_FOUND",
-    "message": "Document not found",
-    "details": {}
-  }
-}
+{"detail": "Document not found"}
 ```
+
+Unhandled failures return the structured `error` envelope with
+`code: INTERNAL_ERROR`; expected API errors use FastAPI's `detail` field.
 
 ## Pagination
 ```json
@@ -108,15 +98,15 @@ Authorization: Bearer <access_token>
 
 ## Streaming (SSE)
 ```
-event: token
-data: {"text": "根据"}
-
-event: token
-data: {"text": "公司"}
-
 event: sources
-data: {"sources": [{"doc_id": "...", "chunk_id": "...", "score": 0.92}]}
+data: [{"doc_id": "...", "chunk_id": "...", "score": 0.92}]
+
+event: token
+data: 根据
+
+event: token
+data: 公司
 
 event: done
-data: {}
+data: {"query_id": "...", "retrieval_count": 1}
 ```

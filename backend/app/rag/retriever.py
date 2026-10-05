@@ -9,7 +9,6 @@ with Reciprocal Rank Fusion when ``RAG_HYBRID_SEARCH_ENABLED`` is set.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from langchain_core.documents import Document as LCDocument
 

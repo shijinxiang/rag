@@ -90,7 +90,91 @@ docker compose -f docker/docker-compose.yml up -d --build
 ```
 
 ### Kubernetes (via Helm or kubectl)
-TBD — k8s manifests coming in a future release.
+Kubernetes manifests are available under `k8s/`. Apply `namespace.yaml`, `configmap.yaml`, a populated copy of `secret.example.yaml`, then the migration Job and workloads.
+
+The Kubernetes workloads require PostgreSQL with pgvector, Redis, and MinIO
+endpoints configured in `rag-secrets` and `rag-config`. Provision these managed
+services before deploying. `rag-uploads` requires a storage class that supports
+ReadWriteMany because API pods and workers share uploads. No production cluster
+is configured on the development machine.
+
+CD builds `rag-agent-backend` and `rag-agent-frontend` in GHCR. Set `KUBE_CONFIG`
+and `RAG_SECRETS_YAML` in the selected GitHub environment (`staging` or
+`production`). Deployment fails clearly when either value is missing.
+
+## Local Acceptance Without an API Key
+
+From the repository root:
+
+```bash
+docker compose --env-file .env -f docker/docker-compose.yml up -d --build
+docker compose --env-file .env -f docker/docker-compose.yml ps
+docker compose --env-file .env -f docker/docker-compose.yml exec backend alembic current
+docker compose --env-file .env -f docker/docker-compose.yml exec backend alembic upgrade head
+python scripts/run_evaluation.py --mode offline
+docker compose --env-file .env -f docker/docker-compose.yml exec backend python -m pytest tests/ --no-cov
+```
+
+The health checks, registration, login, refresh, role controls, review queue,
+audit, Redis, MinIO, and monitoring work without an external API key. Actual
+embedding and generated answers require a valid `OPENAI_API_KEY`. The stack
+verification script uses deterministic test embeddings only within its own
+check process, and verifies real PostgreSQL/pgvector storage and deletion.
+The application does not substitute fabricated answers for an API failure.
+
+For local execution the script expects the backend at `127.0.0.1:8000` inside
+the backend container. Copy it into that container and execute it there when
+using Docker Desktop on Windows:
+
+```bash
+docker cp scripts/verify_stack.py rag-backend:/tmp/verify_stack.py
+docker compose -f docker/docker-compose.yml exec backend python /tmp/verify_stack.py
+```
+
+Provision a trusted administrator from the server terminal (password entry is
+hidden), or promote an existing registered account:
+
+```bash
+docker compose -f docker/docker-compose.yml exec backend \
+  python -m app.manage_user admin --email admin@example.com --role admin
+docker compose -f docker/docker-compose.yml exec backend \
+  python -m app.manage_user manager --role manager --department hr
+```
+
+Public registration creates employees. Employees read their department's
+documents and submit deletion review requests. Managers upload, retry and
+delete only their department's documents. Administrators manage all
+departments and decide reviews. Access tokens expire after 30 minutes and
+refresh tokens after 7 days by default; invalid, wrong-type and expired tokens
+return 401. Refresh tokens are stateless and user deactivation is checked
+against the database. Administrative role changes take effect on subsequent
+requests.
+
+The optional browser check requires Playwright installed outside the repository
+and a local Chrome installation. On this Windows machine:
+
+```powershell
+$env:PLAYWRIGHT_MODULE='D:\langchain_RAG_agent_env\browser-check\node_modules\playwright'
+$env:DOCKER_CLI='C:\Program Files\Docker\Docker\resources\bin\docker.exe'
+$env:CHECK_OUTPUT='D:\langchain_RAG_agent_env'
+node scripts/verify_frontend.cjs
+```
+
+The check creates uniquely named temporary accounts/documents and removes them
+on exit. It verifies registration/login, token refresh, role controls, manager
+upload/retry, administrator views, logout, and desktop/mobile page width.
+
+Next.js 15.5.27 includes the current security fixes. `npm audit --omit=dev`
+reports no production advisories; seven high-severity development advisories
+remain in Tailwind 3/ESLint dependencies. Do not run `npm audit fix --force`
+without validating a Tailwind 4 migration.
+
+Grafana (`http://localhost:3001`) loads the RAG Operations dashboard and a
+Prometheus data source automatically. LangSmith is disabled by default; set
+`LANGSMITH_ENABLED=true` and a key to enable it. For LLM-based Ragas scoring,
+provide a dataset containing questions, answers, retrieved context text and
+reference answers, and run `python scripts/run_evaluation.py --mode ragas
+--metrics faithfulness,answer_relevance,context_precision,context_recall`.
 
 ### Cloud Deployment Options
 - **Railway**: Point to the Dockerfile, set env vars

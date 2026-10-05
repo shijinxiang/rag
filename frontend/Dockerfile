@@ -14,6 +14,8 @@ COPY package.json package-lock.json* ./
 RUN npm ci
 
 COPY . .
+ARG API_INTERNAL_URL=http://backend:8000
+ENV API_INTERNAL_URL=$API_INTERNAL_URL
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
@@ -48,6 +50,6 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1
 
 CMD ["node", "server.js"]

@@ -23,6 +23,7 @@ from app.agent.nodes import (
     route_after_classify,
     route_after_retrieve,
     route_after_review,
+    tool_node,
 )
 from app.agent.state import AgentState
 
@@ -42,6 +43,7 @@ def build_agent_graph() -> StateGraph:
     builder.add_node("retrieve", retrieve_node)
     builder.add_node("generate", generate_node)
     builder.add_node("review", review_node)
+    builder.add_node("tools", tool_node)
 
     # ---- Edges ----
     builder.add_edge(START, "classify")
@@ -53,16 +55,26 @@ def build_agent_graph() -> StateGraph:
             "retrieve": "retrieve",
             "generate": "generate",
             "review": "review",
+            "tools": "tools",
         },
     )
 
-    builder.add_edge("retrieve", "generate")
+    builder.add_conditional_edges(
+        "retrieve",
+        route_after_retrieve,
+        {
+            "tools": "tools",
+            "generate": "generate",
+        },
+    )
+    builder.add_edge("tools", "generate")
 
     builder.add_conditional_edges(
         "review",
         route_after_review,
         {
             "generate": "generate",
+            "tools": "tools",
             "__end__": END,
         },
     )

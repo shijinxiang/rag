@@ -11,20 +11,17 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
-from typing import AsyncIterator, Optional
 
 from langchain_core.documents import Document as LCDocument
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
-from app.rag.reranker import Reranker
-from app.rag.query_rewriter import QueryRewriter
-from app.rag.retriever import Retriever
 from app.agent.graph import get_agent_graph
+from app.config import settings
+from app.rag.query_rewriter import QueryRewriter
+from app.rag.reranker import Reranker
+from app.rag.retriever import Retriever
 from app.services.generation_service import (
     ContextDoc,
-    GenerationResult,
     GenerationService,
 )
 
@@ -40,8 +37,8 @@ class QueryService:
         self._generator = GenerationService()
 
         # Phase 2 components are lazily created on first use
-        self._rewriter: Optional[QueryRewriter] = None
-        self._reranker: Optional[Reranker] = None
+        self._rewriter: QueryRewriter | None = None
+        self._reranker: Reranker | None = None
 
     # ------------------------------------------------------------------
     # Lazy initializers
@@ -64,11 +61,11 @@ class QueryService:
     async def ask(
         self,
         question: str,
-        user_id: Optional[str] = None,
-        filters: Optional[dict] = None,
-        top_k: Optional[int] = None,
+        user_id: str | None = None,
+        filters: dict | None = None,
+        top_k: int | None = None,
         stream: bool = False,
-    ) -> "QueryResult":
+    ) -> QueryResult:
         """Execute a Q&A query through the full Phase 2 pipeline.
 
         Args:
@@ -171,10 +168,10 @@ class QueryService:
     async def ask_with_agent(
         self,
         question: str,
-        user_id: Optional[str] = None,
-        filters: Optional[dict] = None,
-        top_k: Optional[int] = None,
-    ) -> "QueryResult":
+        user_id: str | None = None,
+        filters: dict | None = None,
+        top_k: int | None = None,
+    ) -> QueryResult:
         """Execute a Q&A query using the LangGraph Agent.
 
         The agent classifies the question intent, runs the appropriate
@@ -198,6 +195,9 @@ class QueryService:
             "citations": [],
             "needs_review": False,
             "review_approved": False,
+            "review_status": "not_required",
+            "tool_calls": [],
+            "tool_result": None,
             "messages": [],
             "error": None,
         }
@@ -227,8 +227,9 @@ class QueryService:
                 prompt_tokens=0,
                 completion_tokens=0,
                 total_tokens=0,
+                review_status=final_state.get("review_status", "not_required"),
             )
-        except Exception as exc:
+        except Exception:
             logger.exception("Agent query failed — falling back to simple pipeline.")
             # Fallback to the standard pipeline
             return await self.ask(
@@ -242,8 +243,8 @@ class QueryService:
     async def retrieve_only(
         self,
         question: str,
-        filters: Optional[dict] = None,
-        top_k: Optional[int] = None,
+        filters: dict | None = None,
+        top_k: int | None = None,
     ) -> list[dict]:
         """Retrieve relevant documents without generating an answer.
 
@@ -366,6 +367,7 @@ class QueryResult:
         prompt_tokens: int = 0,
         completion_tokens: int = 0,
         total_tokens: int = 0,
+        review_status: str = "not_required",
     ):
         self.query_id = query_id
         self.question = question
@@ -376,3 +378,4 @@ class QueryResult:
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
         self.total_tokens = total_tokens
+        self.review_status = review_status

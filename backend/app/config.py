@@ -5,7 +5,6 @@ Application Configuration — pydantic-settings
 Centralizes all configuration from environment variables and .env files.
 """
 from functools import lru_cache
-from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -78,8 +77,8 @@ class Settings(BaseSettings):
     RAG_HYBRID_TOP_K: int = 20  # Documents recalled per path in hybrid mode
     RAG_RERANKER_ENABLED: bool = False  # Enable in stage 2
     RAG_RERANKER_PROVIDER: str = "cohere"  # cohere | bge | jina
-    RAG_COHERE_API_KEY: Optional[str] = None
-    RAG_JINA_API_KEY: Optional[str] = None
+    RAG_COHERE_API_KEY: str | None = None
+    RAG_JINA_API_KEY: str | None = None
 
     # ---- Query Rewrite ----
     RAG_QUERY_REWRITE_ENABLED: bool = False
@@ -89,7 +88,7 @@ class Settings(BaseSettings):
 
     # ---- LangSmith ----
     LANGSMITH_ENABLED: bool = False
-    LANGSMITH_API_KEY: Optional[str] = None
+    LANGSMITH_API_KEY: str | None = None
     LANGSMITH_PROJECT: str = "rag-agent"
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
 

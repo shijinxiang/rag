@@ -16,6 +16,8 @@ downloads/
 eggs/
 .eggs/
 lib/
+!frontend/src/lib/
+!frontend/src/lib/**
 lib64/
 parts/
 sdist/
@@ -191,3 +193,6 @@ tmp_pytest/
 backend/.tmp/
 backend/.test-artifacts/
 *.db
+.ruff_cache/
+results/
+.zcode/

@@ -3,9 +3,7 @@
 Generation Service — LLM answer generation with citations
 =============================================================================
 """
-import json
 import logging
-from typing import AsyncIterator, Optional
 
 from openai import AsyncOpenAI
 
@@ -29,7 +27,7 @@ SYSTEM_PROMPT = """你是一个企业知识库助手。请严格根据以下提�
 class GenerationService:
     """LLM answer generation with streaming and citation support."""
 
-    def __init__(self, client: Optional[AsyncOpenAI] = None):
+    def __init__(self, client: AsyncOpenAI | None = None):
         self._client = client or AsyncOpenAI(
             api_key=settings.OPENAI_API_KEY,
             max_retries=settings.OPENAI_MAX_RETRIES,
@@ -146,9 +144,9 @@ class ContextDoc:
         doc_title: str = "Unknown",
         doc_id: str = "",
         chunk_id: str = "",
-        page_number: Optional[int] = None,
+        page_number: int | None = None,
         score: float = 0.0,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ):
         self.content = content
         self.doc_title = doc_title

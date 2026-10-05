@@ -5,14 +5,13 @@ Embedding Service — OpenAI text-embedding-3 with batching + retry
 """
 import asyncio
 import logging
-from typing import Optional
 
 from openai import AsyncOpenAI
 from tenacity import (
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
 
 from app.config import settings
@@ -32,7 +31,7 @@ class EmbeddingService:
         "text-embedding-ada-002": 1536,
     }
 
-    def __init__(self, client: Optional[AsyncOpenAI] = None):
+    def __init__(self, client: AsyncOpenAI | None = None):
         self._client = client or AsyncOpenAI(
             api_key=settings.OPENAI_API_KEY,
             max_retries=settings.OPENAI_MAX_RETRIES,

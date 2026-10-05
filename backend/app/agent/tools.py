@@ -10,11 +10,9 @@ the ``tools`` node.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
 
 from langchain_core.tools import tool
 
-from app.config import settings
 from app.rag.retriever import Retriever
 
 logger = logging.getLogger(__name__)
@@ -41,7 +39,7 @@ def _get_retriever() -> Retriever:
 async def search_knowledge(
     query: str,
     top_k: int = 10,
-    department: Optional[str] = None,
+    department: str | None = None,
     hybrid: bool = True,
 ) -> str:
     """Search the enterprise knowledge base for relevant documents.
@@ -93,21 +91,19 @@ async def get_document_info(doc_id: str) -> str:
     Returns:
         Document metadata as a formatted string.
     """
-    from app.db.vector_store import get_vector_store
+    return f"Document ID: {doc_id}\n请通过 GET /api/v1/documents/{doc_id} 查看文档详情。"
 
-    store = get_vector_store()
-    # Query the vector store for document info
-    # For now, return a placeholder — full doc metadata retrieval
-    # requires the DB session, which is injected at a higher level.
-    return (
-        f"Document ID: {doc_id}\n"
-        f"查询文档详情需要数据库会话，请通过文档管理 API 查看。"
-    )
+
+@tool
+async def list_documents(department: str | None = None) -> str:
+    """Return the document listing endpoint for read-only document discovery."""
+    suffix = f"?department={department}" if department else ""
+    return f"请通过 GET /api/v1/documents{suffix} 查看文档列表。"
 
 
 # ---------------------------------------------------------------------------
 # Tool registry
 # ---------------------------------------------------------------------------
 
-TOOLS: list = [search_knowledge, get_document_info]
+TOOLS: list = [search_knowledge, get_document_info, list_documents]
 """Registry of all available tools for the agent."""

@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Optional
 
 from langchain_core.documents import Document as LCDocument
 
@@ -139,7 +138,7 @@ class Reranker:
             self._bge_model.predict, pairs, show_progress_bar=False
         )
 
-        scored = list(zip(documents, scores))
+        scored = list(zip(documents, scores, strict=True))
         scored.sort(key=lambda x: x[1], reverse=True)
         return [(doc, round(float(score), 6)) for doc, score in scored[:top_k]]
 

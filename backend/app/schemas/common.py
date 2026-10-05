@@ -3,7 +3,7 @@
 Common Pydantic Schemas — pagination, health, error responses
 =============================================================================
 """
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -23,7 +23,7 @@ class ErrorDetail(BaseModel):
     """Error detail payload."""
     code: str
     message: str
-    details: Optional[dict[str, Any]] = None
+    details: dict[str, Any] | None = None
 
 
 class ErrorResponse(BaseModel):

@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: rag
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: backend}
+  template:
+    metadata: {labels: {app: backend}}
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/shijinxiang/rag-agent-backend:latest
+          ports: [{containerPort: 8000}]
+          envFrom:
+            - configMapRef: {name: rag-config}
+            - secretRef: {name: rag-secrets}
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/data/uploads
+          readinessProbe:
+            httpGet: {path: /api/v1/health, port: 8000}
+          livenessProbe:
+            httpGet: {path: /api/v1/health, port: 8000}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
+      volumes:
+        - name: uploads
+          persistentVolumeClaim: {claimName: rag-uploads}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: rag
+spec:
+  selector: {app: backend}
+  ports: [{port: 8000, targetPort: 8000}]

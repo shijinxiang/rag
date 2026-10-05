@@ -6,7 +6,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
-[![Next.js](https://img.shields.io/badge/Next.js-14-black.svg)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-orange.svg)](https://langchain.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -59,20 +59,20 @@ Full architecture: [docs/architecture.md](docs/architecture.md)
 
 ### Prerequisites
 - Docker >= 24.0 & Docker Compose >= 2.20
-- OpenAI API key
+- OpenAI API key for actual embedding and answer generation; local acceptance can run without one
 
 ### Launch
 
 ```bash
 # 1. Clone
-git clone <repo-url> && cd langchain_RAG_agent
+git clone https://github.com/shijinxiang/rag.git --branch master && cd rag
 
 # 2. Configure
 cp .env.example .env
 # Edit .env: set OPENAI_API_KEY, JWT_SECRET_KEY, SECRET_KEY
 
 # 3. Start all services
-docker compose -f docker/docker-compose.yml up -d
+docker compose --env-file .env -f docker/docker-compose.yml up -d --build
 
 # 4. Verify
 curl http://localhost:8000/api/v1/health
@@ -80,17 +80,17 @@ curl http://localhost:8000/api/v1/health
 
 # 5. Open
 open http://localhost:3000        # Frontend
-open http://localhost:8000/docs   # Swagger API docs
+open http://localhost:8000/docs   # Swagger API docs when APP_DEBUG=true
 ```
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 14, React 18, Tailwind CSS |
+| Frontend | Next.js 15, React 18, Tailwind CSS |
 | Backend | FastAPI, Python 3.12 |
 | Agent | LangGraph, LangChain |
-| LLM | OpenAI Responses API (`gpt-4o`) |
+| LLM | OpenAI Chat Completions API (configurable model) |
 | Embedding | `text-embedding-3-small` (1536d) |
 | Vector DB | PostgreSQL + pgvector (→ Milvus) |
 | Sparse Search | PostgreSQL tsvector + pg_trgm (BM25) |
@@ -149,7 +149,9 @@ See [docs/api.md](docs/api.md) for the full API specification.
 
 ## RAG Evaluation Results
 
-The system is evaluated on a Golden Dataset of 50-100 Q&A pairs across 5 categories (HR policy, product docs, FAQ, legal, tech manuals).
+The repository includes a deterministic two-case dataset for offline evaluation.
+It checks the evaluation code, not real retrieval or generated-answer quality.
+Use a representative dataset and valid API key before claiming production scores.
 
 | Metric | Score | Target |
 |---|---|---|
@@ -159,7 +161,9 @@ The system is evaluated on a Golden Dataset of 50-100 Q&A pairs across 5 categor
 | Faithfulness | — | > 0.85 |
 | Answer Relevance | — | > 0.80 |
 
-*Results will be populated after Stage 5 implementation.*
+`python scripts/run_evaluation.py --mode offline` produces Hit Rate/Recall 1.0
+and MRR/Precision 0.75 on the bundled sample. `--mode ragas` runs actual
+LLM-based Ragas metrics when a suitable dataset and API key are configured.
 
 ## Documentation
 
@@ -190,24 +194,46 @@ Upgraded retrieval with three quality features:
 - **LLM Query Rewrite**: Abbreviation expansion + multi-query generation (gpt-4o-mini)
 - All features gated by config flags, default disabled, backward-compatible
 
-### NOT yet implemented (planned for future phases)
-- JWT / RBAC authentication
-- Full tool calling (SQL, calculate, etc.)
-- Human-in-the-loop review (interrupt-based)
-- Celery async document processing
-- LangSmith / Prometheus / Grafana monitoring
-- Ragas automated evaluation
-- Docker Compose full-stack deployment (infrastructure configs exist, not yet wired end-to-end)
+### Phase 3: LangGraph Agent — ✅ core completed
+The agent exposes a tested graph for intent classification, retrieval, generation,
+allow-listed read-only tool execution, and explicit review state handling.
+
+### Phase 4: Enterprise Capabilities
+JWT registration/login/refresh/profile, database-backed roles, department isolation,
+asynchronous Celery document processing with failure details and retry, persistent
+deletion reviews, administrator approval/rejection, and audit logging are implemented.
+The frontend includes authenticated chat, documents, and administrator views.
+
+### Phase 5: Observability and Evaluation
+Prometheus request/query/retrieval/task metrics, a provisioned Grafana dashboard,
+optional LangSmith tracing, offline retrieval metrics, and a Ragas evaluation CLI
+are implemented. LLM evaluation requires external credentials.
+
+### Phase 6: Deployment
+Docker Compose includes migrations and health checks for all nine services. CI
+checks lint/tests/build, Compose, Kubernetes resources, and Docker images. CD
+builds GHCR images; Kubernetes deployment requires a target cluster and GitHub
+environment secrets. See [deployment guide](docs/deployment.md) for commands.
+
+### Acceptance and Remaining Limits
+- Backend unit and API tests: 46 passing on Windows and in the Linux container.
+- Real PostgreSQL migration and repeated upgrade, Celery failure/retry, offline
+  pgvector processing, JWT/RBAC, review approval, audit, and vector deletion pass
+  via `scripts/verify_stack.py`.
+- Actual OpenAI answer generation and LLM-based Ragas scoring have not been run
+  without an API key. Production Kubernetes rollout has not been attempted.
+- Frontend production dependency audit is clean. Seven high-severity development
+  dependency advisories remain in the Tailwind 3/ESLint glob toolchain.
 
 ## Roadmap
 
 - [x] **Phase 0**: Project skeleton, Git init, config files
 - [x] **Phase 1**: Basic RAG MVP (upload → embed → retrieve → answer)
 - [x] **Phase 2**: Retrieval quality (Hybrid Search + Reranker + Query Rewrite)
-- [ ] **Phase 3**: Agent (LangGraph routing + tool calling + human-in-the-loop)
-- [ ] **Phase 4**: Enterprise (JWT/RBAC + async tasks + audit logging)
-- [ ] **Phase 5**: Observability & Evaluation (Ragas + LangSmith + Grafana)
-- [ ] **Phase 6**: Production deployment (CI/CD + K8s + demo)
+- [x] **Phase 3**: Agent core (LangGraph routing + read-only tools + review state)
+- [x] **Phase 4**: Enterprise (JWT/RBAC + async tasks + audit logging)
+- [x] **Phase 5**: Observability & Evaluation (Prometheus metrics + offline evaluation + Grafana)
+- [x] **Phase 6**: Production deployment (Compose, CI/CD, Kubernetes manifests)
 
 ## License
 

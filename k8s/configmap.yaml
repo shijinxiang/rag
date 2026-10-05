@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rag-config
+  namespace: rag
+data:
+  APP_ENV: production
+  APP_DEBUG: "false"
+  POSTGRES_DB: rag_agent
+  POSTGRES_USER: rag_user
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/1
+  MINIO_ENDPOINT: minio:9000
+  LANGSMITH_ENABLED: "false"

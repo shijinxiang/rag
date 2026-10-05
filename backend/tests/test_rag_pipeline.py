@@ -7,10 +7,9 @@ These tests exercise the new Phase 2 components independently and as an
 integrated pipeline.  All external dependencies (Cohere, BGE, Jina, OpenAI)
 are mocked by the fixtures in ``conftest.py`` so no real API keys are needed.
 """
-import uuid
 
 import pytest
-
+from langchain_core.documents import Document as LCDocument
 
 # ============================================================================
 # RRF Fusion (pure function — no mocking needed)
@@ -161,11 +160,11 @@ class TestReranker:
     @pytest.mark.asyncio
     async def test_rerank_cohere_mocked(self, _mock_phase2_deps):
         """With the Cohere mock active, reranking should succeed."""
-        from app.rag.reranker import Reranker
         from langchain_core.documents import Document as LCDocument
 
         # Set the API key so the provider doesn't bail early
         from app.config import settings
+        from app.rag.reranker import Reranker
         settings.RAG_COHERE_API_KEY = "test-key"
 
         docs = [
@@ -181,8 +180,9 @@ class TestReranker:
 
     @pytest.mark.asyncio
     async def test_rerank_bge_mocked(self, _mock_phase2_deps):
-        from app.rag.reranker import Reranker
         from langchain_core.documents import Document as LCDocument
+
+        from app.rag.reranker import Reranker
 
         docs = [
             LCDocument(page_content=f"Doc {i}", metadata={"chunk_index": i})
@@ -197,9 +197,10 @@ class TestReranker:
 
     @pytest.mark.asyncio
     async def test_rerank_jina_mocked(self, _mock_phase2_deps):
-        from app.rag.reranker import Reranker
         from langchain_core.documents import Document as LCDocument
+
         from app.config import settings
+        from app.rag.reranker import Reranker
 
         settings.RAG_JINA_API_KEY = "test-key"
 
@@ -214,8 +215,9 @@ class TestReranker:
 
     @pytest.mark.asyncio
     async def test_rerank_unknown_provider_falls_back(self):
-        from app.rag.reranker import Reranker
         from langchain_core.documents import Document as LCDocument
+
+        from app.rag.reranker import Reranker
 
         docs = [LCDocument(page_content="x", metadata={})]
         reranker = Reranker(provider="unknown_provider")

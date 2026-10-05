@@ -4,14 +4,12 @@ Document & DocumentChunk ORM Models
 =============================================================================
 """
 import uuid
-from typing import Optional
 
-from sqlalchemy import Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db._types import JSONCompat, NullableVector  # JSONB→JSON on SQLite; Vector→Float on SQLite
-
 from app.models.base import Base, TimestampMixin, UUIDMixin
 
 
@@ -35,10 +33,10 @@ class Document(Base, UUIDMixin, TimestampMixin):
         String(20), default=DocumentStatus.PENDING, nullable=False, index=True
     )
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    department: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    department: Mapped[str | None] = mapped_column(String(128), nullable=True)
     access_level: Mapped[int] = mapped_column(Integer, default=0)  # 0=public, 1=internal, 2=confidential
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
     chunks: Mapped[list["DocumentChunk"]] = relationship(
@@ -59,9 +57,9 @@ class DocumentChunk(Base, UUIDMixin, TimestampMixin):
     )
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    page_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     chunk_metadata: Mapped[dict] = mapped_column(JSONCompat(), default=dict, nullable=False)
-    embedding: Mapped[Optional[list[float]]] = mapped_column(
+    embedding: Mapped[list[float] | None] = mapped_column(
         NullableVector(1536), nullable=True
     )
 

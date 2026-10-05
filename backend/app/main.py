@@ -4,14 +4,22 @@ FastAPI Application Entry Point
 =============================================================================
 """
 import logging
+import os
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.api.v1.router import router as v1_router
 from app.config import settings
+from app.core.metrics import (
+    HTTP_REQUEST_DURATION_SECONDS,
+    HTTP_REQUESTS_TOTAL,
+    QUERY_REQUESTS_TOTAL,
+)
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -74,6 +82,32 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def record_http_metrics(request: Request, call_next):
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        if request.url.path.startswith("/api/v1/queries"):
+            QUERY_REQUESTS_TOTAL.labels(status="failure").inc()
+        raise
+    route = request.scope.get("route")
+    path = route.path if route else "unmatched"
+    if request.url.path.startswith("/api/v1/queries") and response.status_code >= 400:
+        QUERY_REQUESTS_TOTAL.labels(status="failure").inc()
+    if path != "/metrics":
+        HTTP_REQUEST_DURATION_SECONDS.labels(request.method, path).observe(time.perf_counter() - started)
+        HTTP_REQUESTS_TOTAL.labels(request.method, path, str(response.status_code)).inc()
+    return response
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics():
+    if not settings.PROMETHEUS_ENABLED:
+        return Response(status_code=404)
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 # ---------------------------------------------------------------------------
 # Exception Handlers
 # ---------------------------------------------------------------------------
@@ -98,6 +132,11 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Routes
 # ---------------------------------------------------------------------------
 app.include_router(v1_router)
+
+if settings.LANGSMITH_ENABLED and settings.LANGSMITH_API_KEY:
+    os.environ["LANGSMITH_TRACING"] = "true"
+    os.environ["LANGSMITH_API_KEY"] = settings.LANGSMITH_API_KEY
+    os.environ["LANGSMITH_PROJECT"] = settings.LANGSMITH_PROJECT
 
 
 # ---------------------------------------------------------------------------

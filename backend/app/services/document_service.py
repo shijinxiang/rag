@@ -4,18 +4,14 @@ Document Service — Upload, parse, chunk, embed, store orchestration
 =============================================================================
 """
 import logging
-import os
-import tempfile
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 from fastapi import UploadFile
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.db.vector_store import get_vector_store
 from app.models.document import Document, DocumentChunk, DocumentStatus
 from app.rag.loader import DocumentLoader
@@ -38,8 +34,9 @@ class DocumentService:
     async def upload_document(
         self,
         file: UploadFile,
-        department: Optional[str] = None,
+        department: str | None = None,
         access_level: int = 0,
+        process_inline: bool = True,
     ) -> Document:
         """
         Full document upload pipeline:
@@ -72,12 +69,16 @@ class DocumentService:
             file_type=file_ext,
             file_size=file_size,
             file_path=str(saved_path),
-            status=DocumentStatus.PROCESSING,
+            status=DocumentStatus.PROCESSING if process_inline else DocumentStatus.PENDING,
             department=department,
             access_level=access_level,
         )
         self._db.add(doc)
         await self._db.flush()  # Get doc.id
+
+        if not process_inline:
+            await self._db.commit()
+            return doc
 
         try:
             # ---- Step 3: Load & Parse ----
@@ -101,7 +102,7 @@ class DocumentService:
 
             # ---- Step 6: Store chunks + embeddings ----
             chunk_records = []
-            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings, strict=True)):
                 chunk_record = DocumentChunk(
                     document_id=doc.id,
                     chunk_index=i,
@@ -133,7 +134,7 @@ class DocumentService:
             # ---- Step 8: Update Document status ----
             doc.status = DocumentStatus.READY
             doc.chunk_count = len(chunks)
-            doc.updated_at = datetime.now(timezone.utc)
+            doc.updated_at = datetime.now(UTC)
 
             logger.info(
                 "Document '%s' processed: %d chunks, %d embeddings",
@@ -150,17 +151,18 @@ class DocumentService:
         await self._db.flush()
         return doc
 
-    async def get_document(self, doc_id: uuid.UUID) -> Optional[Document]:
+    async def get_document(self, doc_id: uuid.UUID, *, for_update: bool = False) -> Document | None:
         """Retrieve a single document by ID."""
-        result = await self._db.execute(
-            select(Document).where(Document.id == doc_id)
-        )
+        query = select(Document).where(Document.id == doc_id)
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self._db.execute(query)
         return result.scalar_one_or_none()
 
     async def list_documents(
         self,
-        department: Optional[str] = None,
-        status: Optional[str] = None,
+        department: str | None = None,
+        status: str | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[Document], int]:
@@ -193,16 +195,13 @@ class DocumentService:
 
     async def delete_document(self, doc_id: uuid.UUID) -> bool:
         """Delete a document and its chunks/embeddings."""
-        doc = await self.get_document(doc_id)
+        doc = await self.get_document(doc_id, for_update=True)
         if doc is None:
             return False
 
         # Remove from vector store
-        try:
-            vector_store = get_vector_store()
-            vector_store.delete_by_doc_id(str(doc_id))
-        except Exception as exc:
-            logger.warning("Failed to delete vectors for doc %s: %s", doc_id, exc)
+        vector_store = get_vector_store()
+        vector_store.delete_by_doc_id(str(doc_id))
 
         # Delete file from disk
         try:

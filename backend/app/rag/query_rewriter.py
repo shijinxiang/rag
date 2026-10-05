@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
 
 from openai import AsyncOpenAI
 
@@ -57,7 +56,7 @@ Example format: ["variant 1", "variant 2", "variant 3"]"""
 class QueryRewriter:
     """LLM-based query rewriter for retrieval quality improvement."""
 
-    def __init__(self, client: Optional[AsyncOpenAI] = None):
+    def __init__(self, client: AsyncOpenAI | None = None):
         self._client = client or AsyncOpenAI(
             api_key=settings.OPENAI_API_KEY,
             max_retries=2,

@@ -16,6 +16,9 @@ jobs:
   build-and-push:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -23,7 +26,17 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/rag-agent
+          images: ghcr.io/${{ github.repository_owner }}/rag-agent-backend
+          tags: |
+            type=ref,event=tag
+            type=sha,prefix=
+            type=raw,value=latest
+
+      - name: Frontend Docker meta
+        id: frontend-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/rag-agent-frontend
           tags: |
             type=ref,event=tag
             type=sha,prefix=
@@ -44,7 +57,7 @@ jobs:
         with:
           context: backend
           push: true
-          tags: ${{ steps.meta.outputs.tags }}-backend
+          tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -53,7 +66,7 @@ jobs:
         with:
           context: frontend
           push: true
-          tags: ${{ steps.meta.outputs.tags }}-frontend
+          tags: ${{ steps.frontend-meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -64,7 +77,29 @@ jobs:
     environment:
       name: ${{ github.event.inputs.environment || 'staging' }}
     steps:
-      - name: Placeholder for deployment
+      - uses: actions/checkout@v4
+      - uses: azure/setup-kubectl@v4
+      - name: Configure target cluster
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
         run: |
-          echo "Deploy to ${{ github.event.inputs.environment || 'staging' }}"
-          echo "Implementation depends on target platform (AWS/Azure/Railway/etc.)"
+          test -n "$KUBE_CONFIG" || { echo 'Set KUBE_CONFIG in the selected GitHub environment'; exit 1; }
+          mkdir -p "$HOME/.kube"
+          printf '%s' "$KUBE_CONFIG" > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+      - name: Migrate and deploy
+        env:
+          RAG_SECRETS: ${{ secrets.RAG_SECRETS_YAML }}
+        run: |
+          test -n "$RAG_SECRETS" || { echo 'Set RAG_SECRETS_YAML in the selected GitHub environment'; exit 1; }
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/configmap.yaml
+          printf '%s' "$RAG_SECRETS" | kubectl apply -f -
+          kubectl delete job rag-migrate -n rag --ignore-not-found
+          kubectl apply -f k8s/migration-job.yaml
+          kubectl wait -n rag --for=condition=complete job/rag-migrate --timeout=180s
+          kubectl apply -k k8s
+          kubectl rollout restart deployment/backend deployment/frontend deployment/celery-worker -n rag
+          kubectl rollout status deployment/backend -n rag --timeout=180s
+          kubectl rollout status deployment/frontend -n rag --timeout=180s
+          kubectl rollout status deployment/celery-worker -n rag --timeout=180s

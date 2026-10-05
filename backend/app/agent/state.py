@@ -5,7 +5,7 @@ Agent State — LangGraph state definition for the RAG agent
 """
 from __future__ import annotations
 
-from typing import Any, Optional, TypedDict
+from typing import Any, TypedDict
 
 
 class AgentState(TypedDict):
@@ -15,10 +15,10 @@ class AgentState(TypedDict):
     question: str
     """Original user question."""
 
-    user_id: Optional[str]
+    user_id: str | None
     """Optional user identifier for RBAC / logging."""
 
-    filters: Optional[dict[str, Any]]
+    filters: dict[str, Any] | None
     """Metadata filters for RBAC (department, access_level)."""
 
     top_k: int
@@ -29,7 +29,7 @@ class AgentState(TypedDict):
     """Intent classification: ``retrieval_qa`` | ``general_chat`` | ``document_operation``."""
 
     # ---- Retrieval ----
-    rewritten_query: Optional[str]
+    rewritten_query: str | None
     """Query-rewritten version of the question (Phase 2)."""
 
     retrieved_docs: list[dict[str, Any]]
@@ -39,7 +39,7 @@ class AgentState(TypedDict):
     """Formatted context string for the LLM prompt."""
 
     # ---- Generation ----
-    answer: Optional[str]
+    answer: str | None
     """Final generated answer."""
 
     citations: list[dict[str, Any]]
@@ -52,10 +52,19 @@ class AgentState(TypedDict):
     review_approved: bool
     """Whether the human approved the action."""
 
+    review_status: str
+    """Review state: ``not_required``, ``pending``, ``approved``, or ``rejected``."""
+
+    tool_calls: list[dict[str, Any]]
+    """Structured tool calls and their results, for auditability."""
+
+    tool_result: str | None
+    """Most recent tool result available to the generation node."""
+
     # ---- Conversation ----
     messages: list[dict[str, Any]]
     """Conversation history (role, content)."""
 
     # ---- Error ----
-    error: Optional[str]
+    error: str | None
     """Error message if something went wrong."""

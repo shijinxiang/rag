@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: celery-worker, namespace: rag}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: celery-worker}}
+  template:
+    metadata: {labels: {app: celery-worker}}
+    spec:
+      containers:
+        - name: celery-worker
+          image: ghcr.io/shijinxiang/rag-agent-backend:latest
+          command: [celery, -A, app.tasks.celery_app, worker, --loglevel=info, --pool=solo, --concurrency=1]
+          ports: [{containerPort: 8001}]
+          envFrom:
+            - configMapRef: {name: rag-config}
+            - secretRef: {name: rag-secrets}
+          volumeMounts:
+            - {name: uploads, mountPath: /app/data/uploads}
+          readinessProbe: {httpGet: {path: /metrics, port: 8001}}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
+      volumes:
+        - name: uploads
+          persistentVolumeClaim: {claimName: rag-uploads}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: celery-worker, namespace: rag}
+spec:
+  selector: {app: celery-worker}
+  ports: [{port: 8001, targetPort: 8001}]

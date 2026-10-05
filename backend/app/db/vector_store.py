@@ -6,9 +6,6 @@ Unified vector store interface supporting pgvector as primary backend.
 """
 from __future__ import annotations
 
-import uuid
-from typing import Optional
-
 from langchain_core.documents import Document as LCDocument
 from langchain_openai import OpenAIEmbeddings
 from langchain_postgres import PGVector
@@ -26,7 +23,7 @@ class VectorStore:
             dimensions=settings.OPENAI_EMBEDDING_DIMENSIONS,
             openai_api_key=settings.OPENAI_API_KEY,
         )
-        self._store: Optional[PGVector] = None
+        self._store: PGVector | None = None
         self._collection_name = "rag_documents"
 
     @property
@@ -89,7 +86,13 @@ class VectorStore:
         """Delete all vectors associated with a document ID."""
         # Use SQLAlchemy to delete chunks by doc_id
         # PGVector stores metadata, so we filter and delete
-        self.store.delete(filter={"doc_id": doc_id})
+        from sqlalchemy import delete
+        with self.store._make_sync_session() as session:
+            session.execute(delete(self.store.EmbeddingStore).where(
+                self.store.EmbeddingStore.collection_id == self.store.get_collection(session).uuid,
+                self.store.EmbeddingStore.cmetadata["doc_id"].astext == doc_id,
+            ))
+            session.commit()
 
     def delete_collection(self) -> None:
         """Delete the entire vector collection."""
@@ -101,8 +104,8 @@ class VectorStore:
             # PGVector doesn't have a direct count method, use internal table
             with self.store._get_connection() as conn:
                 result = conn.execute(
-                    text(f"SELECT count(*) FROM langchain_pg_embedding WHERE collection_id = "
-                         f"(SELECT uuid FROM langchain_pg_collection WHERE name = :name)"),
+                    text("SELECT count(*) FROM langchain_pg_embedding WHERE collection_id = "
+                         "(SELECT uuid FROM langchain_pg_collection WHERE name = :name)"),
                     {"name": self._collection_name},
                 )
                 return result.scalar() or 0
@@ -111,7 +114,7 @@ class VectorStore:
 
 
 # Singleton instance
-_vector_store: Optional[VectorStore] = None
+_vector_store: VectorStore | None = None
 
 
 def get_vector_store() -> VectorStore:

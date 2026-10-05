@@ -1,0 +1,4 @@
+[
+  {"question": "When should leave be requested?", "expected_answer": "Three working days in advance.", "answer": "Three working days in advance.", "relevant_docs": ["hr-policy"], "retrieved_docs": ["travel-policy", "hr-policy"], "retrieved_contexts": ["Travel expenses require receipts.", "Request leave three working days in advance."]},
+  {"question": "What is required for reimbursement?", "expected_answer": "Receipts and an approved travel request.", "answer": "Receipts and an approved travel request.", "relevant_docs": ["travel-policy"], "retrieved_docs": ["travel-policy"], "retrieved_contexts": ["Travel reimbursement requires receipts and an approved travel request."]}
+]

@@ -18,7 +18,6 @@ where rank_i(d) is the position of document d in the i-th ranked list
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from langchain_core.documents import Document as LCDocument
 

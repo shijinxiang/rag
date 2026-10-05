@@ -3,16 +3,20 @@
 Database Session — SQLAlchemy async engine + session factory (lazy init)
 =============================================================================
 """
-from typing import Optional
 
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.config import settings
 
 # Lazily-initialized engine — avoids importing PostgreSQL driver at import time
 # so tests can override DATABASE_URL before the engine is created.
-_engine: Optional[AsyncEngine] = None
-_AsyncSessionLocal: Optional[async_sessionmaker[AsyncSession]] = None
+_engine: AsyncEngine | None = None
+_AsyncSessionLocal: async_sessionmaker[AsyncSession] | None = None
 
 
 def _is_sqlite(url: str) -> bool:

@@ -1,0 +1,12 @@
+__pycache__
+*.py[cod]
+.pytest_cache
+.test-artifacts
+.coverage
+htmlcov
+.venv
+venv
+data/uploads
+data/files
+.env*
+*.db

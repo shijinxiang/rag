@@ -1,5 +1,3 @@
-version: "3.9"
-
 # =============================================================================
 # Enterprise Knowledge RAG Agent — Docker Compose
 # =============================================================================
@@ -22,12 +20,13 @@ services:
     environment:
       - APP_NAME=${APP_NAME:-Enterprise Knowledge RAG Agent}
       - APP_ENV=${APP_ENV:-production}
+      - APP_DEBUG=${APP_DEBUG:-false}
       - APP_HOST=0.0.0.0
       - APP_PORT=8000
-      - SECRET_KEY=${SECRET_KEY}
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-local-env}
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-rag_user}:${POSTGRES_PASSWORD:-rag_password}@postgres:5432/${POSTGRES_DB:-rag_agent}
       - DATABASE_URL_SYNC=postgresql://${POSTGRES_USER:-rag_user}:${POSTGRES_PASSWORD:-rag_password}@postgres:5432/${POSTGRES_DB:-rag_agent}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-local-placeholder}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-5.5}
       - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
       - REDIS_URL=redis://redis:6379/0
@@ -37,9 +36,10 @@ services:
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - MINIO_BUCKET=${MINIO_BUCKET:-rag-documents}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me-in-local-env}
       - CORS_ORIGINS=["http://localhost:3000","http://frontend:3000"]
       - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+      - LANGSMITH_ENABLED=${LANGSMITH_ENABLED:-false}
       - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-rag-agent}
       - VECTOR_STORE_TYPE=${VECTOR_STORE_TYPE:-pgvector}
     depends_on:
@@ -49,6 +49,7 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"]
     volumes:
       - backend_uploads:/app/data/uploads
       - backend_files:/app/data/files
@@ -62,34 +63,44 @@ services:
       start_period: 10s
 
   # ==========================
-  # Celery Worker (disabled until Phase 4 — see roadmap)
+  # Celery Worker
   # ==========================
-  # celery-worker:
-  #   build:
-  #     context: ../backend
-  #     dockerfile: Dockerfile
-  #   container_name: rag-celery-worker
-  #   restart: unless-stopped
-  #   command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
-  #   environment:
-  #     - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-rag_user}:${POSTGRES_PASSWORD:-rag_password}@postgres:5432/${POSTGRES_DB:-rag_agent}
-  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
-  #     - REDIS_URL=redis://redis:6379/0
-  #     - CELERY_BROKER_URL=redis://redis:6379/0
-  #     - CELERY_RESULT_BACKEND=redis://redis:6379/1
-  #     - MINIO_ENDPOINT=minio:9000
-  #     - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
-  #     - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
-  #     - MINIO_BUCKET=${MINIO_BUCKET:-rag-documents}
-  #   depends_on:
-  #     - postgres
-  #     - redis
-  #     - minio
-  #   volumes:
-  #     - backend_uploads:/app/data/uploads
-  #     - backend_files:/app/data/files
-  #   networks:
-  #     - rag-network
+  celery-worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: rag-celery-worker
+    restart: unless-stopped
+    command: celery -A app.tasks.celery_app worker --loglevel=info --pool=solo --concurrency=1
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-rag_user}:${POSTGRES_PASSWORD:-rag_password}@postgres:5432/${POSTGRES_DB:-rag_agent}
+      - DATABASE_URL_SYNC=postgresql://${POSTGRES_USER:-rag_user}:${POSTGRES_PASSWORD:-rag_password}@postgres:5432/${POSTGRES_DB:-rag_agent}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-local-placeholder}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me-in-local-env}
+      - APP_DEBUG=false
+      - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
+      - OPENAI_MAX_RETRIES=${OPENAI_MAX_RETRIES:-0}
+      - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-15}
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - backend_uploads:/app/data/uploads
+      - backend_files:/app/data/files
+    networks:
+      - rag-network
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.tasks.celery_app", "inspect", "ping", "--timeout", "5"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # ==========================
   # Frontend (Next.js)
@@ -98,13 +109,15 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
+      args:
+        API_INTERNAL_URL: http://backend:8000
     container_name: rag-frontend
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=http://backend:8000/api/v1
+      - API_INTERNAL_URL=http://backend:8000
       - NEXT_PUBLIC_APP_NAME=${APP_NAME:-Enterprise RAG Agent}
     depends_on:
       backend:
@@ -159,7 +172,9 @@ services:
   # MinIO (S3-compatible Object Storage)
   # ==========================
   minio:
-    image: minio/minio:latest
+    # The original minio/minio Docker Hub repository is no longer published.
+    # This compatible distribution keeps the local S3-compatible service available.
+    image: elestio/minio:latest
     container_name: rag-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -192,10 +207,17 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - backend
-      - frontend
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
     networks:
       - rag-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   # ==========================
   # Prometheus
@@ -211,6 +233,31 @@ services:
       - prometheus_data:/prometheus
     networks:
       - rag-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: rag-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - rag-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   # ==========================
   # Grafana (optional, uncomment to enable)

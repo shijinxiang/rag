@@ -77,8 +77,8 @@ async def test_engine(_test_db_url):
 
     engine = create_async_engine(_test_db_url, echo=False)
 
+    from app import models  # noqa: F401
     from app.models.base import Base
-    from app.models.document import Document, DocumentChunk  # noqa: register tables
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -89,7 +89,12 @@ async def test_engine(_test_db_url):
 
 @pytest_asyncio.fixture
 async def test_db(test_engine) -> AsyncGenerator:
-    """Per-test session - wrapped in a transaction that rolls back."""
+    """Reset tables because queue endpoints deliberately commit before dispatch."""
+    from app.models.base import Base
+
+    async with test_engine.begin() as conn:
+        for table in reversed(Base.metadata.sorted_tables):
+            await conn.execute(table.delete())
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     session_factory = async_sessionmaker(
@@ -231,13 +236,23 @@ async def async_client(test_db) -> AsyncIterator:
     """FastAPI TestClient whose DB dependency is overridden to test_db."""
     from httpx import ASGITransport, AsyncClient
 
+    from app.api.v1.auth import get_current_user
     from app.db.session import get_db
     from app.main import app
+    from app.models.user import User, UserRole
 
     async def override_get_db():
         yield test_db
 
     app.dependency_overrides[get_db] = override_get_db
+    test_user = User(
+        username="test-admin",
+        email="test-admin@example.com",
+        password_hash="unused",
+        role=UserRole.ADMIN,
+    )
+    test_user.id = uuid.uuid4()
+    app.dependency_overrides[get_current_user] = lambda: test_user
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:

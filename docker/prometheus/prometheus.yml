@@ -27,14 +27,9 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  - job_name: "postgres"
+  - job_name: "celery-worker"
+    metrics_path: /metrics
     static_configs:
-      - targets: ["postgres:5432"]
+      - targets: ["celery-worker:8001"]
         labels:
-          service: postgres
-
-  - job_name: "redis"
-    static_configs:
-      - targets: ["redis:6379"]
-        labels:
-          service: redis
+          service: celery-worker

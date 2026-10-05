@@ -3,7 +3,6 @@
 Query Pydantic Schemas
 =============================================================================
 """
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -11,16 +10,16 @@ from pydantic import BaseModel, Field
 class QueryRequest(BaseModel):
     """Request body for Q&A queries."""
     question: str = Field(..., min_length=1, max_length=5000, description="用户问题")
-    top_k: Optional[int] = Field(default=None, ge=1, le=50, description="检索文档数量")
-    department: Optional[str] = Field(default=None, description="按部门过滤")
+    top_k: int | None = Field(default=None, ge=1, le=50, description="检索文档数量")
+    department: str | None = Field(default=None, description="按部门过滤")
     stream: bool = Field(default=False, description="是否使用 SSE 流式返回")
 
 
 class AgentQueryRequest(BaseModel):
     """Request body for agent-based Q&A queries."""
     question: str = Field(..., min_length=1, max_length=5000, description="用户问题")
-    top_k: Optional[int] = Field(default=None, ge=1, le=50, description="检索文档数量")
-    department: Optional[str] = Field(default=None, description="按部门过滤")
+    top_k: int | None = Field(default=None, ge=1, le=50, description="检索文档数量")
+    department: str | None = Field(default=None, description="按部门过滤")
     use_agent: bool = Field(default=True, description="是否使用 LangGraph Agent")
 
 
@@ -30,7 +29,7 @@ class SourceCitation(BaseModel):
     doc_title: str
     doc_id: str
     chunk_id: str = ""
-    page_number: Optional[int] = None
+    page_number: int | None = None
     score: float = 0.0
     excerpt: str = ""
 
@@ -45,6 +44,7 @@ class QueryResponse(BaseModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    review_status: str = "not_required"
 
 
 class QueryHistoryItem(BaseModel):
@@ -58,8 +58,8 @@ class QueryHistoryItem(BaseModel):
 class RetrieveRequest(BaseModel):
     """Request body for retrieval-only endpoint."""
     question: str = Field(..., min_length=1, max_length=5000)
-    top_k: Optional[int] = Field(default=None, ge=1, le=50)
-    department: Optional[str] = None
+    top_k: int | None = Field(default=None, ge=1, le=50)
+    department: str | None = None
 
 
 class RetrieveResult(BaseModel):
@@ -67,7 +67,7 @@ class RetrieveResult(BaseModel):
     content: str
     doc_title: str
     doc_id: str
-    page_number: Optional[int] = None
+    page_number: int | None = None
     score: float = 0.0
 
 
