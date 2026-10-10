@@ -35,7 +35,7 @@ async function main() {
   page.on("pageerror", (error) => errors.push(error.message));
   try {
     await page.goto(baseURL);
-    await page.getByRole("button", { name: "创建账号", exact: true }).click();
+    await page.getByRole("tab", { name: "创建账号", exact: true }).click();
     await page.getByLabel("用户名").fill(username);
     await page.getByLabel("邮箱").fill(`${username}@example.com`);
     await page.getByLabel("部门", { exact: true }).fill("ui-verify");

@@ -83,6 +83,38 @@ open http://localhost:3000        # Frontend
 open http://localhost:8000/docs   # Swagger API docs when APP_DEBUG=true
 ```
 
+## Frontend Workspace
+
+The frontend provides desktop sidebar navigation and a compact mobile navigation
+bar. Chat supports Markdown, expandable sources, copying answers, cancellation,
+and retry. Documents include current-page search, status filters, pagination,
+processing details, and deletion confirmation. Administrators have separate
+review/audit and model configuration views. API keys remain password fields and
+are cleared after a successful submission; the existing server configuration
+endpoint still requires a service restart before credentials take effect.
+
+For isolated browser regression checks, install Playwright outside the project
+and have Chrome available. Start the frontend on port 3100:
+
+```powershell
+npm --prefix frontend run dev -- --hostname 127.0.0.1 --port 3100
+```
+
+In another terminal, run from the repository root and set the external dependency
+and output paths to your local installation:
+
+```powershell
+$env:PLAYWRIGHT_MODULE='D:\langchain_RAG_agent_env\browser-check\node_modules\playwright'
+$env:CHECK_OUTPUT='D:\langchain_RAG_agent_env\ui-check'
+node scripts/verify_ui.cjs
+```
+
+These checks intercept all API calls, use disposable in-memory fixtures, and need
+neither Docker nor an API key. They cover authentication views, chat, document
+actions, reviews, configuration forms, role-specific controls, and layouts at
+1440, 768, 390, and 320 pixels. They do not verify real backend or model behavior.
+Use `FRONTEND_URL` to target a different frontend address.
+
 ## Tech Stack
 
 | Layer | Technology |

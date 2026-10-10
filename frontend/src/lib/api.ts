@@ -25,11 +25,19 @@ export function logout() {
   sessionStorage.removeItem("rag_refresh_token");
 }
 
-export async function authenticate(username: string, password: string, email?: string, department?: string): Promise<UserInfo> {
-  const tokens = await request<Tokens>(email ? "/auth/register" : "/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ username, password, email, department }),
-  });
+export async function authenticate(
+  username: string,
+  password: string,
+  email?: string,
+  department?: string,
+): Promise<UserInfo> {
+  const tokens = await request<Tokens>(
+    email ? "/auth/register" : "/auth/login",
+    {
+      method: "POST",
+      body: JSON.stringify({ username, password, email, department }),
+    },
+  );
   sessionStorage.setItem("rag_access_token", tokens.access_token);
   sessionStorage.setItem("rag_refresh_token", tokens.refresh_token);
   return tokens.user;
@@ -51,24 +59,38 @@ async function refreshTokens(): Promise<boolean> {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: token }),
       });
-      if (!response.ok) { logout(); return false; }
+      if (!response.ok) {
+        logout();
+        return false;
+      }
       const tokens: Tokens = await response.json();
       sessionStorage.setItem("rag_access_token", tokens.access_token);
       sessionStorage.setItem("rag_refresh_token", tokens.refresh_token);
       return true;
-    })().finally(() => { refreshing = null; });
+    })().finally(() => {
+      refreshing = null;
+    });
   }
   return refreshing;
 }
 
-async function authenticatedFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+async function authenticatedFetch(
+  endpoint: string,
+  options: RequestInit = {},
+): Promise<Response> {
   const send = () => {
     const headers = new Headers(options.headers);
-    Object.entries(authorization()).forEach(([name, value]) => headers.set(name, value));
+    Object.entries(authorization()).forEach(([name, value]) =>
+      headers.set(name, value),
+    );
     return fetch(`${API_BASE}${endpoint}`, { ...options, headers });
   };
   let response = await send();
-  if (response.status === 401 && !["/auth/login", "/auth/register", "/auth/refresh"].includes(endpoint) && await refreshTokens()) {
+  if (
+    response.status === 401 &&
+    !["/auth/login", "/auth/register", "/auth/refresh"].includes(endpoint) &&
+    (await refreshTokens())
+  ) {
     response = await send();
   }
   return response;
@@ -128,13 +150,27 @@ export interface HealthStatus {
   environment: string;
 }
 
+function responseError(
+  body: {
+    error?: { message?: string };
+    detail?: string | Array<{ msg: string }>;
+  },
+  status: number,
+): string {
+  if (body.error?.message) return body.error.message;
+  if (typeof body.detail === "string") return body.detail;
+  if (Array.isArray(body.detail))
+    return body.detail.map((item) => item.msg).join("；");
+  return `请求失败（HTTP ${status}）`;
+}
+
 // ============================================================================
 // API Client
 // ============================================================================
 
 async function request<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ): Promise<T> {
   const res = await authenticatedFetch(endpoint, {
     ...options,
@@ -146,9 +182,7 @@ async function request<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    const message =
-      body?.error?.message || body?.detail || `HTTP ${res.status}`;
-    throw new Error(message);
+    throw new Error(responseError(body, res.status));
   }
 
   if (res.status === 204) return undefined as T;
@@ -170,7 +204,7 @@ export async function healthCheck(): Promise<HealthStatus> {
 export async function uploadDocument(
   file: File,
   department?: string,
-  accessLevel?: number
+  accessLevel?: number,
 ): Promise<DocumentInfo> {
   const formData = new FormData();
   formData.append("file", file);
@@ -178,7 +212,8 @@ export async function uploadDocument(
   let endpoint = "/documents/upload";
   const params = new URLSearchParams();
   if (department) params.set("department", department);
-  if (accessLevel !== undefined) params.set("access_level", String(accessLevel));
+  if (accessLevel !== undefined)
+    params.set("access_level", String(accessLevel));
   const qs = params.toString();
   if (qs) endpoint += `?${qs}`;
 
@@ -189,7 +224,7 @@ export async function uploadDocument(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body?.detail || `Upload failed: HTTP ${res.status}`);
+    throw new Error(responseError(body, res.status));
   }
 
   return res.json();
@@ -199,7 +234,7 @@ export async function listDocuments(
   page = 1,
   pageSize = 20,
   department?: string,
-  status?: string
+  status?: string,
 ): Promise<DocumentList> {
   const params = new URLSearchParams();
   params.set("page", String(page));
@@ -224,10 +259,12 @@ export async function deleteDocument(docId: string): Promise<void> {
 export async function askQuestion(
   question: string,
   topK?: number,
-  department?: string
+  department?: string,
+  signal?: AbortSignal,
 ): Promise<QueryResult> {
   return request<QueryResult>("/queries", {
     method: "POST",
+    signal,
     body: JSON.stringify({
       question,
       top_k: topK,
@@ -244,10 +281,12 @@ export async function streamQuestion(
   onDone: () => void,
   onError?: (error: Error) => void,
   topK?: number,
-  department?: string
+  department?: string,
+  signal?: AbortSignal,
 ): Promise<void> {
   const res = await authenticatedFetch("/queries/stream", {
     method: "POST",
+    signal,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       question,
@@ -259,7 +298,7 @@ export async function streamQuestion(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body?.detail || `Stream error: HTTP ${res.status}`);
+    throw new Error(responseError(body, res.status));
   }
 
   const reader = res.body?.getReader();
@@ -279,11 +318,21 @@ export async function streamQuestion(
       const frame = buffer.slice(0, boundary);
       buffer = buffer.slice(boundary + 2);
       const lines = frame.split("\n");
-      const event = lines.find((line) => line.startsWith("event:"))?.slice(6).trim();
-      const data = lines.filter((line) => line.startsWith("data:")).map((line) => line.slice(5).replace(/^ /, "")).join("\n");
+      const event = lines
+        .find((line) => line.startsWith("event:"))
+        ?.slice(6)
+        .trim();
+      const data = lines
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).replace(/^ /, ""))
+        .join("\n");
       if (event === "sources") onSources(JSON.parse(data));
       else if (event === "token") onToken(data);
-      else if (event === "error") { const error = new Error(JSON.parse(data).message); onError?.(error); throw error; }
+      else if (event === "error") {
+        const error = new Error(JSON.parse(data).message);
+        onError?.(error);
+        throw error;
+      }
     }
   }
 
@@ -294,14 +343,48 @@ export async function documentAction(id: string, action: "retry" | "review") {
   return request(`/documents/${id}/${action}`, { method: "POST" });
 }
 
-export interface Review { id: string; action: string; status: string; payload: Record<string, string>; }
-export interface Audit { id: string; action: string; outcome: string; created_at: string; resource_id: string; }
-export async function reviews(): Promise<Review[]> { return request("/admin/reviews"); }
-export async function audits(): Promise<Audit[]> { return request("/admin/audit-logs"); }
-export async function decideReview(id: string, decision: "approve" | "reject") { return request(`/admin/reviews/${id}/${decision}`, { method: "POST", body: JSON.stringify({}) }); }
-export interface OpenAISettings { configured: boolean; masked: string | null; restart_required?: boolean; }
-export async function getOpenAISettings(): Promise<OpenAISettings> { return request("/admin/settings/openai"); }
-export async function updateOpenAISettings(api_key: string): Promise<OpenAISettings> { return request("/admin/settings/openai", { method: "PUT", body: JSON.stringify({ api_key }) }); }
+export interface Review {
+  id: string;
+  action: string;
+  status: string;
+  payload: Record<string, string>;
+  created_at?: string;
+}
+export interface Audit {
+  id: string;
+  action: string;
+  outcome: string;
+  created_at: string;
+  resource_id: string;
+}
+export async function reviews(): Promise<Review[]> {
+  return request("/admin/reviews");
+}
+export async function audits(): Promise<Audit[]> {
+  return request("/admin/audit-logs");
+}
+export async function decideReview(id: string, decision: "approve" | "reject") {
+  return request(`/admin/reviews/${id}/${decision}`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+export interface OpenAISettings {
+  configured: boolean;
+  masked: string | null;
+  restart_required?: boolean;
+}
+export async function getOpenAISettings(): Promise<OpenAISettings> {
+  return request("/admin/settings/openai");
+}
+export async function updateOpenAISettings(
+  api_key: string,
+): Promise<OpenAISettings> {
+  return request("/admin/settings/openai", {
+    method: "PUT",
+    body: JSON.stringify({ api_key }),
+  });
+}
 
 // ============================================================================
 // Retrieve Only (Debug)
@@ -310,7 +393,7 @@ export async function updateOpenAISettings(api_key: string): Promise<OpenAISetti
 export async function retrieveDocuments(
   question: string,
   topK?: number,
-  department?: string
+  department?: string,
 ): Promise<{
   query: string;
   results: Array<{
